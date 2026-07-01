@@ -2741,6 +2741,7 @@ let adminEditKey    = null;
 let adminPricePreview = null;
 
 function openAdminPanel(tab) {
+  if(!currentUser?.isAdmin) return;
   adminCurrentTab = tab || 'users';
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
   const tabEl = document.getElementById('admin-tab-' + adminCurrentTab);
@@ -2758,6 +2759,7 @@ function closeAdminPanel() {
 
 // ─── TAB USUARIOS ───────────────────────────
 function renderAdminUsers(el) {
+  if(!currentUser?.isAdmin) return;
   const clients = Object.entries(USERS).filter(([k,u]) => k !== 'ezequiel sanchez' && !u.isVendor);
   const vendors = Object.entries(USERS).filter(([k,u]) => u.isVendor);
 
@@ -2889,6 +2891,7 @@ function adminSaveVendor() {
 }
 
 function adminResetPassword(key) {
+  if(!currentUser?.isAdmin) return;
   const u = USERS[key];
   if (!u) return;
   const newPass = (u.cuit||'').replace(/-/g,'') || key;
@@ -2901,6 +2904,7 @@ function adminResetPassword(key) {
 }
 
 function adminImportClientsExcel(input) {
+  if(!currentUser?.isAdmin) return;
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
@@ -2961,6 +2965,7 @@ function adminImportClientsExcel(input) {
 }
 
 function adminApplyClientImport(preview) {
+  if(!currentUser?.isAdmin) return;
   preview.forEach(r => {
     const existing = USERS[r.key];
     USERS[r.key] = {
@@ -2979,6 +2984,7 @@ function adminApplyClientImport(preview) {
 }
 
 function adminShowUserForm(key) {
+  if(!currentUser?.isAdmin) return;
   adminEditKey = key;
   const u = key ? USERS[key] : null;
   const f = document.getElementById('adminUserForm');
@@ -3020,6 +3026,7 @@ function adminToggleEmailField(val) {
   document.getElementById('af_email').style.display       = show ? '' : 'none';
 }
 function adminSaveUser() {
+  if(!currentUser?.isAdmin) return;
   const key  = document.getElementById('af_key').value.trim().toLowerCase();
   const pass = document.getElementById('af_pass').value.trim();
   const rs   = document.getElementById('af_rs').value.trim();
@@ -3039,6 +3046,7 @@ function adminSaveUser() {
 }
 
 function adminDeleteUser(key) {
+  if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Eliminar el usuario "${key}"?`)) return;
   delete USERS[key];
   adminSaveUsersToStorage();
@@ -3047,6 +3055,7 @@ function adminDeleteUser(key) {
 }
 
 function adminSaveUsersToStorage() {
+  if(!currentUser?.isAdmin) return;
   // Guarda todos los usuarios excepto Ezequiel Sánchez (admin hardcoded)
   const toSave = {};
   Object.entries(USERS).filter(([k])=>k!=='ezequiel sanchez').forEach(([k,v])=>{ toSave[k]=v; });
@@ -3055,6 +3064,7 @@ function adminSaveUsersToStorage() {
 
 // ─── TAB PRECIOS ────────────────────────────
 function renderAdminPrices(el) {
+  if(!currentUser?.isAdmin) return;
   const log = JSON.parse(localStorage.getItem('price_log') || '[]');
   const logHtml = log.length ? `
     <div style="margin-bottom:20px">
@@ -3088,6 +3098,7 @@ function renderAdminPrices(el) {
 }
 
 function adminLoadPriceExcel(input) {
+  if(!currentUser?.isAdmin) return;
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
@@ -3134,6 +3145,7 @@ function adminLoadPriceExcel(input) {
 }
 
 function renderAdminPriceResult() {
+  if(!currentUser?.isAdmin) return;
   const el = document.getElementById('adminPricePreviewArea');
   if (!el || !adminPricePreview) return;
   const { changed, newProds, missing } = adminPricePreview;
@@ -3163,6 +3175,7 @@ function renderAdminPriceResult() {
 }
 
 function adminRemoveFromMissing(cod) {
+  if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Quitar "${cod}" del catálogo?`)) return;
   const i = PRODUCTS.findIndex(p=>p.codigo===cod);
   if (i>=0) PRODUCTS.splice(i,1);
@@ -3172,6 +3185,7 @@ function adminRemoveFromMissing(cod) {
 }
 
 function adminApplyPrices() {
+  if(!currentUser?.isAdmin) return;
   const { excelMap, changed, newProds, missing } = adminPricePreview;
   PRODUCTS.forEach(p => {
     if (excelMap[p.codigo]) {
@@ -3200,6 +3214,7 @@ function adminApplyPrices() {
 
 // ─── TAB PRODUCTOS ───────────────────────────
 function renderAdminProducts(el) {
+  if(!currentUser?.isAdmin) return;
   el.innerHTML = `
     <div class="admin-toolbar">
       <button class="admin-btn-add" onclick="adminShowProductForm()">+ Agregar producto</button>
@@ -3225,6 +3240,7 @@ function renderAdminProducts(el) {
 }
 
 function adminInlineEditProduct(i, cod) {
+  if(!currentUser?.isAdmin) return;
   const p = PRODUCTS.find(x=>x.codigo===cod);
   if (!p) return;
   const cats = [...new Set(PRODUCTS.map(x=>x.categoria))].sort();
@@ -3246,6 +3262,7 @@ function adminInlineEditProduct(i, cod) {
 }
 
 function adminSaveInlineProduct(i, oldCod) {
+  if(!currentUser?.isAdmin) return;
   const newCod = document.getElementById('ie_cod').value.trim();
   const desc   = document.getElementById('ie_desc').value.trim();
   const cat    = document.getElementById('ie_cat').value;
@@ -3262,6 +3279,7 @@ function adminSaveInlineProduct(i, oldCod) {
 }
 
 function adminShowProductForm() {
+  if(!currentUser?.isAdmin) return;
   const f = document.getElementById('adminProductForm');
   f.style.display = 'block';
   const cats = [...new Set(PRODUCTS.map(p=>p.categoria))].sort();
@@ -3292,6 +3310,7 @@ function adminShowProductForm() {
 }
 
 function adminSaveProduct() {
+  if(!currentUser?.isAdmin) return;
   const cod  = document.getElementById('apf_cod').value.trim();
   const desc = document.getElementById('apf_desc').value.trim();
   const cat  = document.getElementById('apf_cat').value;
@@ -3309,6 +3328,7 @@ function adminSaveProduct() {
 }
 
 function adminDeleteProduct(cod) {
+  if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Quitar "${cod}" del catálogo? Esta acción no se puede deshacer.`)) return;
   const i = PRODUCTS.findIndex(p=>p.codigo===cod);
   if (i>=0) PRODUCTS.splice(i,1);
@@ -3318,6 +3338,7 @@ function adminDeleteProduct(cod) {
 }
 
 function saveCustomProducts() {
+  if(!currentUser?.isAdmin) return;
   localStorage.setItem('admin_products', JSON.stringify(PRODUCTS));
   if (currentUser) { buildCatTabs(); renderTable(); }
 }
