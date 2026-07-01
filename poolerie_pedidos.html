@@ -3055,7 +3055,9 @@ function adminDeleteUser(key) {
 }
 
 function adminSaveUsersToStorage() {
-  if(!currentUser?.isAdmin) return;
+  // Nota: también la usa guardarNuevaClave() para que un cliente persista su propia
+  // contraseña, por eso NO lleva guard de isAdmin — las funciones que exponen
+  // mutaciones/datos de otros usuarios ya están guardadas antes de llamar a esta.
   // Guarda todos los usuarios excepto Ezequiel Sánchez (admin hardcoded)
   const toSave = {};
   Object.entries(USERS).filter(([k])=>k!=='ezequiel sanchez').forEach(([k,v])=>{ toSave[k]=v; });
