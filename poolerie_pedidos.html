@@ -2069,7 +2069,7 @@ function openBreakdown(cod){
   document.getElementById('breakdownModal').classList.add('open');
 }
 function closeBreakdown(){document.getElementById('breakdownModal').classList.remove('open');}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function fmt(n){return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtARS(n){return '$ '+fmt(n);}
 function fmtUSD(n){return 'US$ '+fmt(n);}
