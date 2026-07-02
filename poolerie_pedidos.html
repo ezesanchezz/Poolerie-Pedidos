@@ -1982,7 +1982,7 @@ async function sendOrder(){
   const xlsxBase64=XLSX.write(wbk,{bookType:'xlsx',type:'base64'});
 
   // HTML del email
-  const emailHtml=`<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:14px;color:#1E293B;max-width:650px;margin:0 auto;padding:20px">
+  const emailHtml=`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;font-size:14px;color:#1E293B;max-width:650px;margin:0 auto;padding:20px">
 <h2 style="color:#0D6EBD;border-bottom:2px solid #0D6EBD;padding-bottom:8px">📦 Nuevo pedido recibido</h2>
 <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
 <tr><td style="padding:5px 0;color:#64748B;width:160px">Cliente</td><td style="padding:5px 0;font-weight:700">${esc(currentUser.razonSocial)}</td></tr>
