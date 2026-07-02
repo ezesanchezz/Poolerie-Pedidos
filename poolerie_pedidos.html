@@ -1072,7 +1072,7 @@ input.qty{width:70px;font-weight:600}
       <thead><tr><th>Código</th><th>Descripción</th><th style="text-align:right">ARS c/IVA</th><th style="text-align:center">Cant.</th><th style="text-align:right">Subtotal</th></tr></thead>
       <tbody id="revBody"></tbody>
     </table>
-    <!-- Logística: solo clientes -->
+    <!-- Logística: clientes y vendedores (pedidos por teléfono) -->
     <div id="revLogistica" style="display:none;margin:14px 0 0;padding:14px;background:#F0F7FF;border:1px solid #C5DCF5;border-radius:9px">
       <div style="font-weight:700;font-size:.88rem;color:var(--blue-dark);margin-bottom:10px">🚚 Logística del pedido</div>
       <div style="margin-bottom:12px">
@@ -1539,7 +1539,7 @@ function enterApp() {
   document.getElementById('vendorBar').style.display   = user.isVendor ? 'flex' : 'none';
   document.getElementById('clientBar').style.display   = user.isVendor ? 'none' : 'flex';
   document.getElementById('btnClientMgr').style.display = user.isVendor ? 'inline-block' : 'none';
-  document.getElementById('btnCfgEmail').style.display  = user.isVendor ? 'inline-block' : 'none';
+  document.getElementById('btnCfgEmail').style.display  = user.isAdmin ? 'inline-block' : 'none';
   document.getElementById('btnAdmin').style.display     = user.isAdmin  ? 'inline-block' : 'none';
   document.getElementById('btnMiCuenta').style.display  = 'inline-block';
   if (user.isVendor) document.getElementById('descuento').value = currentUser.descuento;
@@ -1854,19 +1854,22 @@ async function openReview(){
     const ft=document.createElement('tr');ft.style.cssText='font-weight:800;background:#F8FBFF';
     ft.innerHTML=`<td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:right">${fmtARS(tot)}</td>`;
     rb.appendChild(ft);
-    // Logística: solo para clientes (no vendedores ni admin)
+    // Logística: para todos (clientes y vendedores que cargan pedidos por teléfono)
     const logEl = document.getElementById('revLogistica');
-    const isClient = currentUser && !currentUser.isVendor && !currentUser.isAdmin;
-    logEl.style.display = isClient ? 'block' : 'none';
-    if (isClient) {
+    logEl.style.display = currentUser ? 'block' : 'none';
+    if (currentUser) {
       // Poblar selector de vendedores
       const vSel = document.getElementById('revVendedor');
       const vendors = await fetchVendors();
       vSel.innerHTML = '<option value="">— Sin asignar —</option>'
         + vendors.map(v => `<option value="${esc(v.key)}">${esc(v.razonSocial)}</option>`).join('');
-      // Restaurar preferencia guardada
-      const saved = localStorage.getItem('pref_vendedor_' + currentUser.key);
-      if (saved) vSel.value = saved;
+      // Restaurar preferencia guardada — solo para clientes (cada vendedor
+      // carga pedidos de clientes distintos, no tiene sentido recordarle
+      // el último elegido)
+      if (!currentUser.isVendor) {
+        const saved = localStorage.getItem('pref_vendedor_' + currentUser.key);
+        if (saved) vSel.value = saved;
+      }
     }
     document.getElementById('revModal').classList.add('open');
   } catch(e) {
@@ -1932,11 +1935,11 @@ async function sendOrder(){
   btn.disabled=true;btn.textContent='📤 Enviando...';
   const p=getParams(),notes=document.getElementById('orderNotes').value.trim();
 
-  // Logística (solo clientes)
+  // Logística (clientes y vendedores que cargan pedidos por teléfono)
   const isClient = currentUser && !currentUser.isVendor && !currentUser.isAdmin;
-  const modality  = isClient ? (document.querySelector('input[name="revModality"]:checked')?.value||'envio') : '';
+  const modality  = document.querySelector('input[name="revModality"]:checked')?.value||'envio';
   const modalityLabel = modality==='retiro' ? '🏭 Retiro en fábrica' : modality==='envio' ? '🚛 Envío a domicilio' : '';
-  const vendedorKey = isClient ? (document.getElementById('revVendedor')?.value||'') : '';
+  const vendedorKey = document.getElementById('revVendedor')?.value||'';
   const vendors = await fetchVendors();
   const vendedorUser = vendedorKey ? vendors.find(v=>v.key===vendedorKey) : null;
   if (isClient && vendedorKey) localStorage.setItem('pref_vendedor_'+currentUser.key, vendedorKey);
@@ -2080,12 +2083,14 @@ function saveClientDiscounts(){
 //  EMAIL CONFIG
 // ═══════════════════════════════════════════
 function openCfg(){
+  if(!currentUser?.isAdmin) return;
   document.getElementById('cfST').value=localStorage.getItem('smtp_token')||APPS_SCRIPT_URL_DEFAULT;
   document.getElementById('cfEM').value=localStorage.getItem('smtp_em')||'ezesanchezo9@gmail.com';
   document.getElementById('cfgModal').classList.add('open');
 }
 function closeCfg(){document.getElementById('cfgModal').classList.remove('open');}
 function saveCfg(){
+  if(!currentUser?.isAdmin) return;
   const token=document.getElementById('cfST').value.trim();
   const em=document.getElementById('cfEM').value.trim();
   if(!token){showToast('Ingresá la URL del servidor','err');return;}
