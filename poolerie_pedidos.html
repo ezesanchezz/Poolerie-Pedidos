@@ -19,7 +19,7 @@
 body{font-family:'Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* ══════ LOGIN ══════ */
-#loginPage{
+#loginPage,#forcedPwPage{
   display:flex;min-height:100vh;
   position:relative;overflow-x:hidden;overflow-y:auto;
   align-items:center;justify-content:center;
@@ -841,6 +841,27 @@ input.qty{width:70px;font-weight:600}
   </div>
 </div>
 
+<!-- ══════ CAMBIO DE CONTRASEÑA OBLIGATORIO (primer login de cliente) ══════ -->
+<div id="forcedPwPage" style="display:none">
+  <div class="login-dots"></div>
+  <div class="login-wrap">
+    <div class="lcard">
+      <div class="lcard-title">🔒 Definí tu nueva contraseña</div>
+      <p style="font-size:.82rem;color:var(--muted);margin:0 0 16px;line-height:1.4">
+        Es tu primer ingreso con la contraseña inicial. Por seguridad, definí una contraseña propia antes de continuar.
+      </p>
+      <div class="fg"><label>Nueva contraseña</label>
+        <input type="password" id="fp_nueva" autocomplete="new-password" placeholder="Nueva contraseña"/>
+      </div>
+      <div class="fg"><label>Repetí la nueva contraseña</label>
+        <input type="password" id="fp_confirma" autocomplete="new-password" placeholder="Repetí la nueva contraseña"/>
+      </div>
+      <button class="btn-login" onclick="submitForcedPasswordChange()">Guardar y continuar →</button>
+      <p class="lerr" id="fpErr"></p>
+    </div>
+  </div>
+</div>
+
 <!-- ══════ APP ══════ -->
 <div id="appPage">
 
@@ -1215,10 +1236,10 @@ const USERS = {
   "lucas ñanez":        { password:"lucas2026",  razonSocial:"Lucas Ñañez",        cuit:"", email:"lnanez@indusplast.com",           descuento:32.5, isVendor:true },
   "nicolas lorenzato":  { password:"nico2026",   razonSocial:"Nicolas Lorenzato",  cuit:"", email:"nlorenzato@indusplast.com",       descuento:32.5, isVendor:true },
   "augusto camilo":     { password:"augusto2026",razonSocial:"Augusto Camilo",     cuit:"", email:"augustocamilo@indusplast.com",    descuento:32.5, isVendor:true },
-  "distribuidora norte s.a.": { password:"poolerie1", razonSocial:"Distribuidora Norte S.A.", cuit:"30-11111111-1", descuento:32.5, isVendor:false },
-  "piscinas del sur srl":     { password:"poolerie2", razonSocial:"Piscinas del Sur SRL",     cuit:"30-22222222-2", descuento:30.0, isVendor:false },
-  "acuatica rosario s.a.":    { password:"poolerie3", razonSocial:"Acuática Rosario S.A.",    cuit:"30-33333333-3", descuento:35.0, isVendor:false },
-  "demo":                     { password:"demo1234",  razonSocial:"Cliente Demo",             cuit:"00-00000000-0", descuento:32.5, isVendor:false },
+  "distribuidora norte s.a.": { password:"poolerie1", razonSocial:"Distribuidora Norte S.A.", cuit:"30-11111111-1", descuento:32.5, isVendor:false, passwordChanged:false },
+  "piscinas del sur srl":     { password:"poolerie2", razonSocial:"Piscinas del Sur SRL",     cuit:"30-22222222-2", descuento:30.0, isVendor:false, passwordChanged:false },
+  "acuatica rosario s.a.":    { password:"poolerie3", razonSocial:"Acuática Rosario S.A.",    cuit:"30-33333333-3", descuento:35.0, isVendor:false, passwordChanged:false },
+  "demo":                     { password:"demo1234",  razonSocial:"Cliente Demo",             cuit:"00-00000000-0", descuento:32.5, isVendor:false, passwordChanged:false },
 };
 
 // Base de clientes (se puede cargar via JSON externo o importar)
@@ -1704,7 +1725,7 @@ const PRODUCT_BREAKDOWN = {
     });
     // Clientes base: se agregan solo si no fueron sobreescritos por admin
     CLIENTS_BASE.forEach(function(c){
-      if(!USERS[c[0]]) USERS[c[0]]={password:c[4],razonSocial:c[1],cuit:c[2],codigo:c[3],descuento:32.5,isVendor:false};
+      if(!USERS[c[0]]) USERS[c[0]]={password:c[4],razonSocial:c[1],cuit:c[2],codigo:c[3],descuento:32.5,isVendor:false,passwordChanged:false};
     });
     // Productos: si hay una lista guardada, reemplaza el catálogo
     const cp = JSON.parse(localStorage.getItem('admin_products') || 'null');
@@ -1827,7 +1848,23 @@ function doLogin() {
   if (!user || user.password !== p) { document.getElementById('lerr').style.display='block'; return; }
   currentUser = { key:uKey, ...user, descuento: getDisc(uKey) };
   document.getElementById('lerr').style.display='none';
+  // Cambio de contraseña obligatorio para clientes que nunca cambiaron la inicial
+  const isClient = !user.isVendor && !user.isAdmin;
+  if (isClient && !user.passwordChanged) {
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('fp_nueva').value='';
+    document.getElementById('fp_confirma').value='';
+    document.getElementById('fpErr').style.display='none';
+    document.getElementById('forcedPwPage').style.display='flex';
+    return;
+  }
+  enterApp();
+}
+
+function enterApp() {
+  const user = currentUser;
   document.getElementById('loginPage').style.display='none';
+  document.getElementById('forcedPwPage').style.display='none';
   document.getElementById('appPage').style.display='flex';
   document.getElementById('clientChip').textContent = user.razonSocial + (user.cuit?' | '+user.cuit:'');
   document.getElementById('hsub').textContent = user.isVendor
@@ -1841,12 +1878,29 @@ function doLogin() {
   document.getElementById('btnMiCuenta').style.display  = 'inline-block';
   if (user.isVendor) document.getElementById('descuento').value = currentUser.descuento;
   // restaurar borrador
-  const d = localStorage.getItem('draft_'+uKey);
+  const d = localStorage.getItem('draft_'+user.key);
   if (d) { quantities = JSON.parse(d); showToast('📝 Borrador anterior restaurado',''); }
   fetchDolar();
   buildCatTabs();
   if(user.isVendor) buildClientSwitcher();
   renderTable();
+}
+
+function submitForcedPasswordChange() {
+  const nueva    = document.getElementById('fp_nueva').value.trim();
+  const confirma = document.getElementById('fp_confirma').value.trim();
+  const err = document.getElementById('fpErr');
+  err.style.display = 'none';
+  if (!nueva)    { err.textContent = 'Ingresá una contraseña.'; err.style.display='block'; return; }
+  if (nueva !== confirma) { err.textContent = 'Las contraseñas no coinciden.'; err.style.display='block'; return; }
+  if (nueva.length < 4)  { err.textContent = 'La contraseña debe tener al menos 4 caracteres.'; err.style.display='block'; return; }
+  USERS[currentUser.key].password = nueva;
+  USERS[currentUser.key].passwordChanged = true;
+  adminSaveUsersToStorage();
+  currentUser.password = nueva;
+  currentUser.passwordChanged = true;
+  showToast('✅ Contraseña actualizada','ok');
+  enterApp();
 }
 
 function doLogout() {
@@ -2069,7 +2123,7 @@ function openBreakdown(cod){
   document.getElementById('breakdownModal').classList.add('open');
 }
 function closeBreakdown(){document.getElementById('breakdownModal').classList.remove('open');}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function fmt(n){return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtARS(n){return '$ '+fmt(n);}
 function fmtUSD(n){return 'US$ '+fmt(n);}
@@ -2723,6 +2777,10 @@ function guardarNuevaClave() {
   if (nueva !== confirma) { showToast('Las contraseñas nuevas no coinciden','err'); return; }
   if (nueva.length < 4)  { showToast('La contraseña debe tener al menos 4 caracteres','err'); return; }
   USERS[currentUser.key].password = nueva;
+  if (!currentUser.isVendor && !currentUser.isAdmin) {
+    USERS[currentUser.key].passwordChanged = true;
+    currentUser.passwordChanged = true;
+  }
   const BUILTIN = ['ezequiel sanchez','admin','vendedor'];
   if (BUILTIN.includes(currentUser.key)) {
     localStorage.setItem('builtin_pwd_'+currentUser.key, nueva);
@@ -2741,6 +2799,7 @@ let adminEditKey    = null;
 let adminPricePreview = null;
 
 function openAdminPanel(tab) {
+  if(!currentUser?.isAdmin) return;
   adminCurrentTab = tab || 'users';
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
   const tabEl = document.getElementById('admin-tab-' + adminCurrentTab);
@@ -2758,6 +2817,7 @@ function closeAdminPanel() {
 
 // ─── TAB USUARIOS ───────────────────────────
 function renderAdminUsers(el) {
+  if(!currentUser?.isAdmin) return;
   const clients = Object.entries(USERS).filter(([k,u]) => k !== 'ezequiel sanchez' && !u.isVendor);
   const vendors = Object.entries(USERS).filter(([k,u]) => u.isVendor);
 
@@ -2889,18 +2949,22 @@ function adminSaveVendor() {
 }
 
 function adminResetPassword(key) {
+  if(!currentUser?.isAdmin) return;
   const u = USERS[key];
   if (!u) return;
   const newPass = (u.cuit||'').replace(/-/g,'') || key;
   if (!newPass) { showToast('Este usuario no tiene CUIT para resetear','err'); return; }
   if (!confirm(`¿Resetear contraseña de "${u.razonSocial}" a su CUIT sin guiones (${newPass})?`)) return;
   USERS[key].password = newPass;
+  // Un reseteo manual vuelve a exigirle al cliente que defina su propia contraseña
+  if (!u.isVendor && !u.isAdmin) USERS[key].passwordChanged = false;
   adminSaveUsersToStorage();
   showToast('✅ Contraseña reseteada','ok');
   openAdminPanel('users');
 }
 
 function adminImportClientsExcel(input) {
+  if(!currentUser?.isAdmin) return;
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
@@ -2961,6 +3025,7 @@ function adminImportClientsExcel(input) {
 }
 
 function adminApplyClientImport(preview) {
+  if(!currentUser?.isAdmin) return;
   preview.forEach(r => {
     const existing = USERS[r.key];
     USERS[r.key] = {
@@ -2970,7 +3035,9 @@ function adminApplyClientImport(preview) {
       codigo:      r.cod,
       descuento:   r.dto,
       isVendor:    false,
-      isAdmin:     false
+      isAdmin:     false,
+      // Cliente nuevo: nunca definió contraseña propia, se lo exige en el próximo login
+      passwordChanged: existing ? (existing.passwordChanged ?? false) : false
     };
   });
   adminSaveUsersToStorage();
@@ -2979,6 +3046,7 @@ function adminApplyClientImport(preview) {
 }
 
 function adminShowUserForm(key) {
+  if(!currentUser?.isAdmin) return;
   adminEditKey = key;
   const u = key ? USERS[key] : null;
   const f = document.getElementById('adminUserForm');
@@ -3020,6 +3088,7 @@ function adminToggleEmailField(val) {
   document.getElementById('af_email').style.display       = show ? '' : 'none';
 }
 function adminSaveUser() {
+  if(!currentUser?.isAdmin) return;
   const key  = document.getElementById('af_key').value.trim().toLowerCase();
   const pass = document.getElementById('af_pass').value.trim();
   const rs   = document.getElementById('af_rs').value.trim();
@@ -3030,8 +3099,12 @@ function adminSaveUser() {
   if (!key)  { showToast('Ingresá la clave de login','err'); return; }
   if (!pass) { showToast('Ingresá una contraseña','err'); return; }
   if (!rs)   { showToast('Ingresá la razón social','err'); return; }
+  const existing = USERS[key];
   const entry = { password:pass, razonSocial:rs, cuit, descuento:desc, isVendor, isAdmin:false };
   if (email) entry.email = email;
+  // Clientes: si es nuevo o el admin cambió la contraseña a mano, hay que
+  // exigirle de nuevo que la redefina; si no tocó la contraseña, se conserva el flag.
+  if (!isVendor) entry.passwordChanged = (existing && existing.password === pass) ? (existing.passwordChanged ?? false) : false;
   USERS[key] = entry;
   adminSaveUsersToStorage();
   showToast('✅ Usuario guardado','ok');
@@ -3039,6 +3112,7 @@ function adminSaveUser() {
 }
 
 function adminDeleteUser(key) {
+  if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Eliminar el usuario "${key}"?`)) return;
   delete USERS[key];
   adminSaveUsersToStorage();
@@ -3047,6 +3121,9 @@ function adminDeleteUser(key) {
 }
 
 function adminSaveUsersToStorage() {
+  // Nota: también la usa guardarNuevaClave() para que un cliente persista su propia
+  // contraseña, por eso NO lleva guard de isAdmin — las funciones que exponen
+  // mutaciones/datos de otros usuarios ya están guardadas antes de llamar a esta.
   // Guarda todos los usuarios excepto Ezequiel Sánchez (admin hardcoded)
   const toSave = {};
   Object.entries(USERS).filter(([k])=>k!=='ezequiel sanchez').forEach(([k,v])=>{ toSave[k]=v; });
@@ -3055,6 +3132,7 @@ function adminSaveUsersToStorage() {
 
 // ─── TAB PRECIOS ────────────────────────────
 function renderAdminPrices(el) {
+  if(!currentUser?.isAdmin) return;
   const log = JSON.parse(localStorage.getItem('price_log') || '[]');
   const logHtml = log.length ? `
     <div style="margin-bottom:20px">
@@ -3088,6 +3166,7 @@ function renderAdminPrices(el) {
 }
 
 function adminLoadPriceExcel(input) {
+  if(!currentUser?.isAdmin) return;
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
@@ -3134,6 +3213,7 @@ function adminLoadPriceExcel(input) {
 }
 
 function renderAdminPriceResult() {
+  if(!currentUser?.isAdmin) return;
   const el = document.getElementById('adminPricePreviewArea');
   if (!el || !adminPricePreview) return;
   const { changed, newProds, missing } = adminPricePreview;
@@ -3163,6 +3243,7 @@ function renderAdminPriceResult() {
 }
 
 function adminRemoveFromMissing(cod) {
+  if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Quitar "${cod}" del catálogo?`)) return;
   const i = PRODUCTS.findIndex(p=>p.codigo===cod);
   if (i>=0) PRODUCTS.splice(i,1);
@@ -3172,6 +3253,7 @@ function adminRemoveFromMissing(cod) {
 }
 
 function adminApplyPrices() {
+  if(!currentUser?.isAdmin) return;
   const { excelMap, changed, newProds, missing } = adminPricePreview;
   PRODUCTS.forEach(p => {
     if (excelMap[p.codigo]) {
@@ -3200,6 +3282,7 @@ function adminApplyPrices() {
 
 // ─── TAB PRODUCTOS ───────────────────────────
 function renderAdminProducts(el) {
+  if(!currentUser?.isAdmin) return;
   el.innerHTML = `
     <div class="admin-toolbar">
       <button class="admin-btn-add" onclick="adminShowProductForm()">+ Agregar producto</button>
@@ -3225,6 +3308,7 @@ function renderAdminProducts(el) {
 }
 
 function adminInlineEditProduct(i, cod) {
+  if(!currentUser?.isAdmin) return;
   const p = PRODUCTS.find(x=>x.codigo===cod);
   if (!p) return;
   const cats = [...new Set(PRODUCTS.map(x=>x.categoria))].sort();
@@ -3246,6 +3330,7 @@ function adminInlineEditProduct(i, cod) {
 }
 
 function adminSaveInlineProduct(i, oldCod) {
+  if(!currentUser?.isAdmin) return;
   const newCod = document.getElementById('ie_cod').value.trim();
   const desc   = document.getElementById('ie_desc').value.trim();
   const cat    = document.getElementById('ie_cat').value;
@@ -3262,6 +3347,7 @@ function adminSaveInlineProduct(i, oldCod) {
 }
 
 function adminShowProductForm() {
+  if(!currentUser?.isAdmin) return;
   const f = document.getElementById('adminProductForm');
   f.style.display = 'block';
   const cats = [...new Set(PRODUCTS.map(p=>p.categoria))].sort();
@@ -3292,6 +3378,7 @@ function adminShowProductForm() {
 }
 
 function adminSaveProduct() {
+  if(!currentUser?.isAdmin) return;
   const cod  = document.getElementById('apf_cod').value.trim();
   const desc = document.getElementById('apf_desc').value.trim();
   const cat  = document.getElementById('apf_cat').value;
@@ -3309,6 +3396,7 @@ function adminSaveProduct() {
 }
 
 function adminDeleteProduct(cod) {
+  if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Quitar "${cod}" del catálogo? Esta acción no se puede deshacer.`)) return;
   const i = PRODUCTS.findIndex(p=>p.codigo===cod);
   if (i>=0) PRODUCTS.splice(i,1);
@@ -3318,6 +3406,7 @@ function adminDeleteProduct(cod) {
 }
 
 function saveCustomProducts() {
+  if(!currentUser?.isAdmin) return;
   localStorage.setItem('admin_products', JSON.stringify(PRODUCTS));
   if (currentUser) { buildCatTabs(); renderTable(); }
 }
