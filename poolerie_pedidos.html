@@ -1929,6 +1929,8 @@ function getMailCfg(){return{webhookUrl:localStorage.getItem('smtp_token')||APPS
 
 async function sendOrder(){
   const rows=getOrderRows();if(!rows.length)return;
+  const vendedorKey = document.getElementById('revVendedor')?.value||'';
+  if (!vendedorKey) { showToast('Elegí el vendedor asignado antes de enviar el pedido.','err'); return; }
   const cfg=getMailCfg();
   if(!cfg.webhookUrl){closeReview();openCfg();showToast('Configurá el email primero.','err');return;}
   const btn=document.getElementById('btnConfirm');
@@ -1939,10 +1941,9 @@ async function sendOrder(){
   const isClient = currentUser && !currentUser.isVendor && !currentUser.isAdmin;
   const modality  = document.querySelector('input[name="revModality"]:checked')?.value||'envio';
   const modalityLabel = modality==='retiro' ? '🏭 Retiro en fábrica' : modality==='envio' ? '🚛 Envío a domicilio' : '';
-  const vendedorKey = document.getElementById('revVendedor')?.value||'';
   const vendors = await fetchVendors();
-  const vendedorUser = vendedorKey ? vendors.find(v=>v.key===vendedorKey) : null;
-  if (isClient && vendedorKey) localStorage.setItem('pref_vendedor_'+currentUser.key, vendedorKey);
+  const vendedorUser = vendors.find(v=>v.key===vendedorKey) || null;
+  if (isClient) localStorage.setItem('pref_vendedor_'+currentUser.key, vendedorKey);
 
   // Email destino: email del vendedor elegido, o el email de configuración por defecto
   const toEmail = (vendedorUser && vendedorUser.email) ? vendedorUser.email : cfg.em;
