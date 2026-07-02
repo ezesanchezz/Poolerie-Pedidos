@@ -30,6 +30,12 @@ const SESSION_SECONDS = 6 * 60 * 60; // 6 horas — límite técnico de CacheSer
 //  ENTRADA HTTP
 // ═══════════════════════════════════════════
 function doPost(e) {
+  // Apps Script a veces reutiliza el mismo proceso entre requests separados
+  // (variables globales "sobreviven"); se limpia el cache acá para que
+  // cada request lea la planilla fresca al menos una vez, y solo evite
+  // relecturas redundantes DENTRO de este mismo request.
+  _sheetCache = null;
+  _usersCache = null;
   let result;
   try {
     const data = JSON.parse(e.postData.contents);
@@ -39,6 +45,7 @@ function doPost(e) {
       case 'changePassword': result = handleChangePassword(data); break;
       case 'listVendors':    result = handleListVendors(data); break;
       case 'listClients':    result = handleListClients(data); break;
+      case 'listUsers':      result = handleListUsers(data); break;
       case 'saveUser':       result = handleSaveUser(data); break;
       case 'deleteUser':     result = handleDeleteUser(data); break;
       case 'resetPassword':  result = handleResetPassword(data); break;
@@ -127,6 +134,26 @@ function handleListClients(data) {
   return { ok: true, clients: clients };
 }
 
+// Combina listClients + listVendors en un solo viaje de ida y vuelta —
+// la usa el panel de Admin para no pedir la planilla dos veces seguidas.
+function handleListUsers(data) {
+  const check = requireAdmin(data);
+  if (check.error) return check.error;
+  const all = readAllUsers();
+  const vendors = all
+    .filter(function (u) { return u.esVendedor; })
+    .map(function (u) { return { key: u.clave, razonSocial: u.razonSocial, email: u.email }; });
+  const clients = all
+    .filter(function (u) { return !u.esVendedor; })
+    .map(function (u) {
+      return {
+        key: u.clave, razonSocial: u.razonSocial, cuit: u.cuit, codigo: u.codigo,
+        descuento: u.descuento, passwordChanged: u.passwordChanged
+      };
+    });
+  return { ok: true, clients: clients, vendors: vendors };
+}
+
 // ═══════════════════════════════════════════
 //  ADMIN — alta / baja / edición / reseteo / import
 // ═══════════════════════════════════════════
@@ -162,6 +189,7 @@ function handleDeleteUser(data) {
   const existing = findUserRow(key);
   if (!existing) return { ok: false, error: 'Usuario no encontrado.' };
   getUsersSheet().deleteRow(existing.rowNum);
+  _usersCache = null;
   return { ok: true };
 }
 
@@ -273,7 +301,17 @@ function hashPassword(password, salt) {
 // ═══════════════════════════════════════════
 // Columnas: Clave | RazonSocial | CUIT | Codigo | PasswordHash | Salt |
 //           Descuento | EsVendedor | EsAdmin | Email | PasswordChanged
+//
+// _sheetCache/_usersCache memoizan la hoja y las filas parseadas durante
+// UNA sola ejecución de doPost (varios handlers llaman a readAllUsers()
+// más de una vez por request — sin esto, cada llamada releía toda la
+// planilla desde cero, y eso era gran parte de la lentitud del panel
+// de Admin, que además de todo hace 1-2 requests en paralelo).
+let _sheetCache = null;
+let _usersCache = null;
+
 function getUsersSheet() {
+  if (_sheetCache) return _sheetCache;
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh = ss.getSheetByName(USERS_SHEET_NAME);
   if (!sh) {
@@ -281,10 +319,12 @@ function getUsersSheet() {
     sh.appendRow(['Clave', 'RazonSocial', 'CUIT', 'Codigo', 'PasswordHash', 'Salt',
       'Descuento', 'EsVendedor', 'EsAdmin', 'Email', 'PasswordChanged']);
   }
-  return sh;
+  _sheetCache = sh;
+  return _sheetCache;
 }
 
 function readAllUsers() {
+  if (_usersCache) return _usersCache;
   const values = getUsersSheet().getDataRange().getValues();
   const rows = [];
   for (let i = 1; i < values.length; i++) {
@@ -305,6 +345,7 @@ function readAllUsers() {
       passwordChanged: r[10] === true || r[10] === 'TRUE'
     });
   }
+  _usersCache = rows;
   return rows;
 }
 
@@ -330,6 +371,7 @@ function upsertUserRow(row, rowNum) {
   } else {
     sh.appendRow(values);
   }
+  _usersCache = null; // la próxima lectura en esta misma ejecución debe ver el cambio
 }
 
 function updateUserFields(clave, fields) {

@@ -2201,16 +2201,34 @@ let _clientListCache = null;
 async function fetchClientList(force){
   if (_clientListCache && !force) return _clientListCache;
   const res = await apiCall({ action:'listClients', token: sessionToken });
-  _clientListCache = res.ok
-    ? res.clients.map(c => ({
-        key: c.key, razonSocial: c.razonSocial, cuit: c.cuit||'', codigo: c.codigo||'',
-        descuento: getDisc(c.key, c.descuento), hasLogin: true
-      }))
-    : [];
+  _clientListCache = res.ok ? res.clients.map(mapClientEntry) : [];
   return _clientListCache;
 }
 function getClientList(){
   return _clientListCache || [];
+}
+function mapClientEntry(c){
+  return {
+    key: c.key, razonSocial: c.razonSocial, cuit: c.cuit||'', codigo: c.codigo||'',
+    descuento: getDisc(c.key, c.descuento), hasLogin: true, passwordChanged: c.passwordChanged
+  };
+}
+
+// Panel de Admin: pide clientes + vendedores en un solo viaje de ida y
+// vuelta (action:'listUsers') en vez de dos requests separados — cada
+// uno de esos ya era lento por sí solo, y hacerlos por separado
+// duplicaba la espera.
+async function fetchAdminUserLists(force){
+  if (_clientListCache && _vendorsCache && !force) return { clients:_clientListCache, vendors:_vendorsCache };
+  const res = await apiCall({ action:'listUsers', token: sessionToken });
+  if (res.ok) {
+    _vendorsCache = res.vendors;
+    _clientListCache = res.clients.map(mapClientEntry);
+  } else {
+    _vendorsCache = _vendorsCache || [];
+    _clientListCache = _clientListCache || [];
+  }
+  return { clients:_clientListCache, vendors:_vendorsCache };
 }
 
 function onClientSearch(q){
@@ -2500,7 +2518,7 @@ function closeAdminPanel() {
 async function renderAdminUsers(el) {
   if(!currentUser?.isAdmin) return;
   el.innerHTML = '<p style="color:var(--muted);padding:20px">Cargando usuarios…</p>';
-  const [clients, vendors] = await Promise.all([fetchClientList(true), fetchVendors(true)]);
+  const { clients, vendors } = await fetchAdminUserLists(true);
   if (adminCurrentTab !== 'users') return; // se cambió de pestaña mientras cargaba
 
   function estadoClave(passwordChanged) {
