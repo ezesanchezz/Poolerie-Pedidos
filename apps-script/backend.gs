@@ -10,14 +10,19 @@
  * 1. Cambiá PEPPER de abajo por cualquier texto largo al azar, y no lo
  *    vuelvas a tocar nunca más (si lo cambiás después de la migración,
  *    todas las contraseñas existentes dejan de funcionar).
- * 2. Corré la función migrarDatosIniciales() una vez (▶ elegí la función
+ * 2. SPREADSHEET_ID ya está completado con el ID de la planilla real
+ *    (este script es standalone, no está atado a ninguna Sheet, así que
+ *    no puede usar "la planilla activa" — necesita el ID explícito).
+ * 3. Corré la función migrarDatosIniciales() una vez (▶ elegí la función
  *    en el desplegable de arriba, "Ejecutar"). Va a crear la pestaña
- *    "Usuarios" y cargar los 336 usuarios que hoy están en el HTML.
- * 3. Volvé a desplegar como Web App (Implementar > Nueva implementación)
+ *    "Usuarios" en esa planilla y cargar los 336 usuarios que hoy están
+ *    en el HTML.
+ * 4. Volvé a desplegar como Web App (Implementar > Nueva implementación)
  *    y pasale la URL nueva a Claude.
  */
 
 const PEPPER = 'CAMBIAR_ESTO_POR_UN_TEXTO_LARGO_AL_AZAR_UNA_SOLA_VEZ';
+const SPREADSHEET_ID = '1HQZdQST90P23rZegQ0TRxi6etoQMOOch';
 const USERS_SHEET_NAME = 'Usuarios';
 const SESSION_SECONDS = 6 * 60 * 60; // 6 horas — límite técnico de CacheService
 
@@ -269,7 +274,7 @@ function hashPassword(password, salt) {
 // Columnas: Clave | RazonSocial | CUIT | Codigo | PasswordHash | Salt |
 //           Descuento | EsVendedor | EsAdmin | Email | PasswordChanged
 function getUsersSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh = ss.getSheetByName(USERS_SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(USERS_SHEET_NAME);
