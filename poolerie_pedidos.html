@@ -1943,6 +1943,10 @@ async function sendOrder(){
   const isClient = currentUser && !currentUser.isVendor && !currentUser.isAdmin;
   const modality  = document.querySelector('input[name="revModality"]:checked')?.value||'envio';
   const modalityLabel = modality==='retiro' ? '🏭 Retiro en fábrica' : modality==='envio' ? '🚛 Envío a domicilio' : '';
+  // GmailApp.sendEmail corrompe emojis fuera del plano básico (📦, 🏭, 🚛, etc.) —
+  // se usa una versión sin emoji solo para el cuerpo del email, el resto de la
+  // app (historial, etc.) sigue mostrando la versión con emoji sin problema.
+  const modalityLabelEmail = modality==='retiro' ? 'Retiro en fábrica' : modality==='envio' ? 'Envío a domicilio' : '';
   const vendors = await fetchVendors();
   const vendedorUser = vendors.find(v=>v.key===vendedorKey) || null;
   if (isClient) localStorage.setItem('pref_vendedor_'+currentUser.key, vendedorKey);
@@ -1993,7 +1997,7 @@ async function sendOrder(){
 <img src="data:image/png;base64,${EMAIL_LOGO_BASE64}" alt="Poolerie" style="height:42px;display:block;margin:0 auto"/>
 </td></tr>
 <tr><td style="padding:28px 24px">
-<h2 style="color:#0D6EBD;border-bottom:2px solid #0D6EBD;padding-bottom:8px;margin:0 0 16px">📦 Nuevo pedido recibido</h2>
+<h2 style="color:#0D6EBD;border-bottom:2px solid #0D6EBD;padding-bottom:8px;margin:0 0 16px">Nuevo pedido recibido</h2>
 <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px">
 <tr><td style="padding:5px 0;color:#64748B;width:160px">Cliente</td><td style="padding:5px 0;font-weight:700">${esc(currentUser.razonSocial)}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">CUIT</td><td style="padding:5px 0">${esc(currentUser.cuit||'-')}</td></tr>
@@ -2001,7 +2005,7 @@ async function sendOrder(){
 <tr><td style="padding:5px 0;color:#64748B">Fecha</td><td style="padding:5px 0">${new Date().toLocaleString('es-AR')}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Forma de pago</td><td style="padding:5px 0">${esc(p.formaPago)}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Descuento</td><td style="padding:5px 0">${String(p.desc).replace(',','.')}</td></tr>
-<tr><td style="padding:5px 0;color:#64748B">Logística</td><td style="padding:5px 0">${esc(modalityLabel||'—')}</td></tr>
+<tr><td style="padding:5px 0;color:#64748B">Logística</td><td style="padding:5px 0">${esc(modalityLabelEmail||'—')}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Vendedor</td><td style="padding:5px 0">${esc(vendedorUser?vendedorUser.razonSocial:'(sin asignar)')}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Artículos</td><td style="padding:5px 0">${rows.length}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Observaciones</td><td style="padding:5px 0">${esc(notes||'(Sin observaciones)')}</td></tr>
