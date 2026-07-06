@@ -24,7 +24,14 @@
 const PEPPER = 'CAMBIAR_ESTO_POR_UN_TEXTO_LARGO_AL_AZAR_UNA_SOLA_VEZ';
 const SPREADSHEET_ID = '1HQZdQST90P23rZegQ0TRxi6etoQMOOch';
 const USERS_SHEET_NAME = 'Usuarios';
+const PRODUCTS_SHEET_NAME = 'Productos'; // catálogo "publicado", vive en esta misma planilla
 const SESSION_SECONDS = 6 * 60 * 60; // 6 horas — límite técnico de CacheService
+
+// Planilla de precios EXTERNA (la de comparación con Vulcano) — de solo
+// lectura, nunca se escribe ahí. El admin la edita libremente cuando
+// quiera; solo se toma una "foto" cuando se aprieta "Actualizar precios".
+const PRICE_SPREADSHEET_ID = '18iKGWNCx4Zdqeo0OvkBAnQ7sIbBvKbaV';
+const PRICE_SHEET_GID = 1046618359;
 
 // ═══════════════════════════════════════════
 //  ENTRADA HTTP
@@ -50,6 +57,8 @@ function doPost(e) {
       case 'deleteUser':     result = handleDeleteUser(data); break;
       case 'resetPassword':  result = handleResetPassword(data); break;
       case 'importClients':  result = handleImportClients(data); break;
+      case 'getProducts':    result = handleGetProducts(data); break;
+      case 'refreshPrices':  result = handleRefreshPrices(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
     }
@@ -233,6 +242,101 @@ function handleImportClients(data) {
     }, existing ? existing.rowNum : null);
   });
   return { ok: true, created: created, updated: updated };
+}
+
+// ═══════════════════════════════════════════
+//  CATÁLOGO DE PRODUCTOS (precios)
+// ═══════════════════════════════════════════
+// getProducts: lo puede pedir cualquiera (cliente o vendedor, incluso sin
+// token) — no es información sensible, ya era visible en el HTML antes
+// de esta migración. Lee el catálogo "publicado" en NUESTRA planilla.
+function handleGetProducts(data) {
+  const products = readAllProducts();
+  const updatedAt = PropertiesService.getScriptProperties().getProperty('PRODUCTS_UPDATED_AT') || null;
+  return { ok: true, products: products, updatedAt: updatedAt };
+}
+
+// refreshPrices: solo admin. Lee la planilla externa de comparación de
+// precios (de SOLO LECTURA, nunca se escribe ahí) y publica una foto
+// actual del catálogo en la pestaña "Productos" de nuestra planilla.
+// Detección de categoría: una fila con texto en Código pero SIN precio
+// válido se toma como título de categoría (ej. "CASCOS - LAGUNE") y se
+// aplica a los productos siguientes hasta el próximo título.
+function handleRefreshPrices(data) {
+  const check = requireAdmin(data);
+  if (check.error) return check.error;
+  let priceSheet;
+  try {
+    const priceSs = SpreadsheetApp.openById(PRICE_SPREADSHEET_ID);
+    priceSheet = priceSs.getSheets().find(function (s) { return s.getSheetId() === PRICE_SHEET_GID; });
+  } catch (e) {
+    return { ok: false, error: 'No se pudo abrir la planilla de precios: ' + e.message };
+  }
+  if (!priceSheet) return { ok: false, error: 'No se encontró la hoja de precios (revisar PRICE_SHEET_GID).' };
+
+  const values = priceSheet.getDataRange().getValues();
+  const products = [];
+  let categoria = '';
+  let categoriasDetectadas = 0;
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    const codigo = String(row[0] || '').trim();
+    const descripcion = String(row[2] || '').trim();
+    const moneda = String(row[3] || '').trim();
+    const precio = parseFloat(row[4]);
+    if (!codigo || codigo.toLowerCase() === 'código' || codigo.toLowerCase() === 'codigo') continue; // fila vacía o encabezado repetido de sección
+    if (!isNaN(precio) && precio > 0) {
+      products.push({ codigo: codigo, descripcion: descripcion, categoria: categoria, precio: precio, moneda: moneda || 'US$' });
+    } else {
+      categoria = codigo; // fila título de categoría (sin precio válido)
+      categoriasDetectadas++;
+    }
+  }
+  if (!products.length) {
+    return { ok: false, error: 'No se encontró ningún producto con precio válido — revisar el formato de la planilla.' };
+  }
+  writeAllProducts(products);
+  const now = new Date().toISOString();
+  PropertiesService.getScriptProperties().setProperty('PRODUCTS_UPDATED_AT', now);
+  return { ok: true, count: products.length, categorias: categoriasDetectadas, updatedAt: now };
+}
+
+function getProductsSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(PRODUCTS_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(PRODUCTS_SHEET_NAME);
+    sh.appendRow(['Codigo', 'Descripcion', 'Categoria', 'Precio', 'Moneda']);
+  }
+  return sh;
+}
+
+function readAllProducts() {
+  const values = getProductsSheet().getDataRange().getValues();
+  const products = [];
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    if (!r[0]) continue;
+    products.push({
+      codigo: String(r[0]),
+      descripcion: String(r[1] || ''),
+      categoria: String(r[2] || ''),
+      precio: parseFloat(r[3]) || 0,
+      moneda: String(r[4] || 'US$')
+    });
+  }
+  return products;
+}
+
+function writeAllProducts(products) {
+  const sh = getProductsSheet();
+  sh.clearContents();
+  const header = ['Codigo', 'Descripcion', 'Categoria', 'Precio', 'Moneda'];
+  sh.getRange(1, 1, 1, header.length).setValues([header]);
+  const rows = products.map(function (p) { return [p.codigo, p.descripcion, p.categoria, p.precio, p.moneda]; });
+  if (rows.length) {
+    sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+  }
 }
 
 // ═══════════════════════════════════════════
