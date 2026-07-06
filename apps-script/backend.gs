@@ -284,7 +284,7 @@ function handleRefreshPrices(data) {
     const descripcion = String(row[2] || '').trim();
     const moneda = String(row[3] || '').trim();
     const precio = parseFloat(row[4]);
-    if (!codigo) continue; // fila vacía o banner sin texto en Código
+    if (!codigo || codigo.toLowerCase() === 'código' || codigo.toLowerCase() === 'codigo') continue; // fila vacía o encabezado repetido de sección
     if (!isNaN(precio) && precio > 0) {
       products.push({ codigo: codigo, descripcion: descripcion, categoria: categoria, precio: precio, moneda: moneda || 'US$' });
     } else {
