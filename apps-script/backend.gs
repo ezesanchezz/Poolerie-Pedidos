@@ -59,6 +59,7 @@ function doPost(e) {
       case 'importClients':  result = handleImportClients(data); break;
       case 'getProducts':    result = handleGetProducts(data); break;
       case 'refreshPrices':  result = handleRefreshPrices(data); break;
+      case 'registerClientRequest': result = handleRegisterClientRequest(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
     }
@@ -337,6 +338,91 @@ function writeAllProducts(products) {
   if (rows.length) {
     sh.getRange(2, 1, rows.length, header.length).setValues(rows);
   }
+}
+
+// ═══════════════════════════════════════════
+//  SOLICITUDES DE ALTA DE CLIENTE (público, sin login)
+// ═══════════════════════════════════════════
+// Ojo: esto NO crea ninguna cuenta ni da acceso al portal. Solo le avisa
+// al admin por mail y deja un registro en la pestaña "Solicitudes" — el
+// alta real (acá y en SAP) la hace una persona a mano, después de revisar
+// que los datos sean reales. Así nadie puede autogenerarse acceso.
+const SOLICITUDES_SHEET_NAME = 'Solicitudes';
+
+function handleRegisterClientRequest(data) {
+  // Honeypot: los bots simples completan todos los campos de un form sin
+  // mirar, incluido este (invisible para una persona). Si viene con
+  // contenido, se responde éxito igual —para no delatar el filtro— pero
+  // no se manda mail ni se guarda nada.
+  if (data.honeypot) return { ok: true };
+
+  const razonSocial = String(data.razonSocial || '').trim();
+  const cuit = String(data.cuit || '').replace(/\D/g, '');
+  const domicilio = String(data.domicilio || '').trim();
+  const email = String(data.email || '').trim();
+  const telefono = String(data.telefono || '').trim();
+
+  if (!razonSocial) return { ok: false, error: 'Falta la razón social.' };
+  if (cuit.length !== 11) return { ok: false, error: 'El CUIT debe tener 11 dígitos.' };
+  if (!domicilio) return { ok: false, error: 'Falta el domicilio.' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: 'El email no es válido.' };
+  if (!telefono) return { ok: false, error: 'Falta el teléfono de contacto.' };
+
+  const fecha = new Date();
+  appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono);
+
+  const adminEmails = readAllUsers()
+    .filter(function (u) { return u.esAdmin && u.email; })
+    .map(function (u) { return u.email; });
+  if (adminEmails.length) {
+    sendRegistrationEmail(adminEmails.join(','), { razonSocial: razonSocial, cuit: cuit, domicilio: domicilio, email: email, telefono: telefono, fecha: fecha });
+  }
+  return { ok: true };
+}
+
+function getSolicitudesSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(SOLICITUDES_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(SOLICITUDES_SHEET_NAME);
+    sh.appendRow(['Fecha', 'RazonSocial', 'CUIT', 'Domicilio', 'Email', 'Telefono', 'Estado']);
+  }
+  return sh;
+}
+
+function appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono) {
+  getSolicitudesSheet().appendRow([fecha, razonSocial, cuit, domicilio, email, telefono, 'Pendiente']);
+}
+
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function sendRegistrationEmail(to, r) {
+  const fechaStr = Utilities.formatDate(r.fecha, 'GMT-3', 'dd/MM/yyyy HH:mm');
+  const html =
+    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">' +
+      '<div style="background:#0D6EBD;padding:16px 24px;border-radius:10px 10px 0 0">' +
+        '<span style="color:#fff;font-size:1.1rem;font-weight:700">Poolerie — Portal de Pedidos</span>' +
+      '</div>' +
+      '<div style="background:#F7FAFD;padding:24px;border:1px solid #E1EAF3;border-top:none;border-radius:0 0 10px 10px">' +
+        '<h2 style="color:#0D3B66;margin:0 0 4px">Nueva solicitud de alta de cliente</h2>' +
+        '<p style="color:#64748B;font-size:.9rem;margin:0 0 18px">Recibida el ' + fechaStr + ' desde el Portal de Pedidos.</p>' +
+        '<table width="100%" cellpadding="8" cellspacing="0" style="background:#fff;border:1px solid #E1EAF3;border-radius:8px;font-size:.92rem">' +
+          '<tr><td style="color:#64748B;width:140px"><strong>Razón Social</strong></td><td>' + escHtml(r.razonSocial) + '</td></tr>' +
+          '<tr><td style="color:#64748B"><strong>CUIT</strong></td><td>' + escHtml(r.cuit) + '</td></tr>' +
+          '<tr><td style="color:#64748B"><strong>Domicilio</strong></td><td>' + escHtml(r.domicilio) + '</td></tr>' +
+          '<tr><td style="color:#64748B"><strong>Email</strong></td><td>' + escHtml(r.email) + '</td></tr>' +
+          '<tr><td style="color:#64748B"><strong>Teléfono</strong></td><td>' + escHtml(r.telefono) + '</td></tr>' +
+        '</table>' +
+        '<p style="color:#64748B;font-size:.85rem;margin-top:18px">' +
+          'Este cliente todavía NO tiene acceso al portal. Para darlo de alta, cargalo manualmente desde el panel de Admin → Usuarios (y en SAP, como corresponda).' +
+        '</p>' +
+      '</div>' +
+    '</div>';
+  GmailApp.sendEmail(to, '🆕 Nueva solicitud de alta de cliente — ' + r.razonSocial, '', { htmlBody: html });
 }
 
 // ═══════════════════════════════════════════

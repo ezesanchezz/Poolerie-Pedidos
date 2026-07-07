@@ -111,6 +111,12 @@ body{font-family:'Roboto',system-ui,sans-serif;background:var(--bg);color:var(--
 .btn-login:hover{opacity:.92;box-shadow:0 8px 32px rgba(13,110,189,.55)}
 .btn-login:active{transform:scale(.985)}
 .lerr{color:#E53E3E;font-size:.8rem;margin-top:10px;text-align:center;display:none;font-weight:600}
+.reg-link{
+  display:block;width:100%;margin-top:16px;padding:0;background:none;border:none;
+  cursor:pointer;font-family:inherit;font-size:.82rem;color:var(--muted);text-align:center;
+}
+.reg-link strong{color:var(--blue);text-decoration:underline}
+.reg-link:hover strong{color:var(--blue-dark)}
 @media(max-height:700px){
   .login-wrap{gap:16px;padding:16px}
   .brand-logo-img{width:180px}
@@ -841,6 +847,7 @@ input.qty{width:70px;font-weight:600}
     </div>
       <button class="btn-login" onclick="doLogin()">Ingresar →</button>
       <p class="lerr" id="lerr">Razón social o contraseña incorrectos.</p>
+      <button type="button" class="reg-link" onclick="openRegistro()">¿Sos cliente nuevo? <strong>Registrate acá</strong></button>
     </div>
     <div style="color:rgba(255,255,255,.3);font-size:.68rem;text-align:center;letter-spacing:1.5px;text-transform:uppercase">Portal B2B · Grupo Indusplast</div>
   </div>
@@ -1147,6 +1154,35 @@ input.qty{width:70px;font-weight:600}
     <div class="mbtns" style="margin-top:16px">
       <button class="bcancel" onclick="closeCfg()">Cancelar</button>
       <button class="bsave" onclick="saveCfg()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTRO DE CLIENTE NUEVO — público, sin login. No crea ninguna cuenta:
+     solo le avisa al admin por mail para que lo dé de alta a mano (acá y en
+     SAP), después de revisar que los datos sean reales. -->
+<div class="modal-overlay" id="regModal">
+  <div class="mcard mcard-sm" style="max-width:480px">
+    <h2>📝 Registrarse como cliente nuevo</h2>
+    <p style="margin:0 0 14px;font-size:.85rem;color:#64748B">
+      Completá tus datos y nos vamos a poner en contacto para darte de alta. Esto no habilita el acceso al instante — un administrador revisa la solicitud primero.
+    </p>
+    <div class="fg"><label>Razón Social</label><input type="text" id="reg_rs" placeholder="Ej: Distribuidora Norte S.A." autocomplete="organization"/></div>
+    <div class="fg"><label>CUIT</label><input type="text" id="reg_cuit" placeholder="30-12345678-9" autocomplete="off" inputmode="numeric"/></div>
+    <div class="fg"><label>Domicilio</label><input type="text" id="reg_dom" placeholder="Calle, número, localidad" autocomplete="street-address"/></div>
+    <div class="fg"><label>Email</label><input type="email" id="reg_email" placeholder="contacto@empresa.com" autocomplete="email"/></div>
+    <div class="fg"><label>Teléfono de contacto</label><input type="tel" id="reg_tel" placeholder="+54 9 ..." autocomplete="tel"/></div>
+    <!-- Honeypot anti-bot: fuera de pantalla, invisible para una persona.
+         Los bots simples completan todos los campos de un form sin mirar;
+         si este viene con contenido, se descarta en el servidor. -->
+    <div style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+      <label>Dejar vacío</label>
+      <input type="text" id="reg_hp" tabindex="-1" autocomplete="off"/>
+    </div>
+    <p class="lerr" id="regErr"></p>
+    <div class="mbtns" style="margin-top:16px">
+      <button class="bcancel" onclick="closeRegistro()">Cancelar</button>
+      <button class="bsave" id="regSubmitBtn" onclick="submitRegistro()">Enviar solicitud</button>
     </div>
   </div>
 </div>
@@ -1613,6 +1649,54 @@ function doLogout() {
   document.getElementById('lu').value=''; document.getElementById('lp').value='';
 }
 function saveDraft() { if(currentUser) localStorage.setItem('draft_'+currentUser.key, JSON.stringify(quantities)); }
+
+// ═══════════════════════════════════════════
+//  REGISTRO DE CLIENTE NUEVO (público, sin login)
+// ═══════════════════════════════════════════
+// No crea ninguna cuenta ni da acceso al portal: solo le avisa al admin
+// por mail (y deja registro en la planilla) para que el alta la haga a
+// mano una persona, revisando que los datos sean reales.
+function openRegistro() {
+  ['reg_rs','reg_cuit','reg_dom','reg_email','reg_tel','reg_hp'].forEach(id => document.getElementById(id).value = '');
+  const err = document.getElementById('regErr');
+  err.style.display = 'none'; err.textContent = '';
+  document.getElementById('regModal').classList.add('open');
+}
+function closeRegistro() { document.getElementById('regModal').classList.remove('open'); }
+
+function validarEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+
+async function submitRegistro() {
+  const err = document.getElementById('regErr');
+  err.style.display = 'none';
+  const razonSocial = document.getElementById('reg_rs').value.trim();
+  const cuit = document.getElementById('reg_cuit').value.replace(/\D/g,'');
+  const domicilio = document.getElementById('reg_dom').value.trim();
+  const email = document.getElementById('reg_email').value.trim();
+  const telefono = document.getElementById('reg_tel').value.trim();
+  const honeypot = document.getElementById('reg_hp').value;
+
+  if (!razonSocial) { err.textContent = 'Ingresá la razón social.'; err.style.display='block'; return; }
+  if (cuit.length !== 11) { err.textContent = 'El CUIT debe tener 11 dígitos.'; err.style.display='block'; return; }
+  if (!domicilio) { err.textContent = 'Ingresá el domicilio.'; err.style.display='block'; return; }
+  if (!validarEmail(email)) { err.textContent = 'Ingresá un email válido.'; err.style.display='block'; return; }
+  if (!telefono) { err.textContent = 'Ingresá un teléfono de contacto.'; err.style.display='block'; return; }
+
+  const btn = document.getElementById('regSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  let res;
+  try {
+    res = await apiCall({ action:'registerClientRequest', razonSocial, cuit, domicilio, email, telefono, honeypot });
+  } catch (e) {
+    err.textContent = 'No se pudo conectar con el servidor. Probá de nuevo.'; err.style.display='block';
+    btn.disabled = false; btn.textContent = 'Enviar solicitud';
+    return;
+  }
+  btn.disabled = false; btn.textContent = 'Enviar solicitud';
+  if (!res.ok) { err.textContent = res.error || 'No se pudo enviar la solicitud.'; err.style.display='block'; return; }
+  closeRegistro();
+  showToast('✅ ¡Listo! Recibimos tu solicitud, te vamos a contactar a la brevedad.', 'ok');
+}
 
 // ═══════════════════════════════════════════
 //  FORMA DE PAGO (cliente)
