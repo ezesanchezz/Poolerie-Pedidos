@@ -1254,25 +1254,36 @@ let sessionToken = null;
 // llamada desde enterApp() tras el login — ver más abajo.
 let PRODUCTS = [];
 let _productsUpdatedAt = null;
+let _productsFetchPromise = null;
 async function fetchProducts(force){
   if (PRODUCTS.length && !force) return PRODUCTS;
-  const res = await apiCall({ action:'getProducts' });
-  if (res.ok && res.products && res.products.length) {
-    PRODUCTS.length = 0;
-    res.products.forEach(p => PRODUCTS.push(p));
-    _productsUpdatedAt = res.updatedAt;
-  }
-  // Edición manual "por las dudas" (panel Admin > Productos): si hay un
-  // ajuste guardado local en este navegador, se aplica encima del
-  // catálogo recién bajado del backend.
-  try {
-    const cp = JSON.parse(localStorage.getItem('admin_products') || 'null');
-    if (cp && Array.isArray(cp) && cp.length) {
+  // Si ya hay una carga en curso (p.ej. disparada en paralelo con el login),
+  // se reutiliza esa misma promesa en vez de duplicar el pedido al backend.
+  if (_productsFetchPromise && !force) return _productsFetchPromise;
+  _productsFetchPromise = (async () => {
+    const res = await apiCall({ action:'getProducts' });
+    if (res.ok && res.products && res.products.length) {
       PRODUCTS.length = 0;
-      cp.forEach(p => PRODUCTS.push(p));
+      res.products.forEach(p => PRODUCTS.push(p));
+      _productsUpdatedAt = res.updatedAt;
     }
-  } catch(e){ console.error('fetchProducts (override local):', e); }
-  return PRODUCTS;
+    // Edición manual "por las dudas" (panel Admin > Productos): si hay un
+    // ajuste guardado local en este navegador, se aplica encima del
+    // catálogo recién bajado del backend.
+    try {
+      const cp = JSON.parse(localStorage.getItem('admin_products') || 'null');
+      if (cp && Array.isArray(cp) && cp.length) {
+        PRODUCTS.length = 0;
+        cp.forEach(p => PRODUCTS.push(p));
+      }
+    } catch(e){ console.error('fetchProducts (override local):', e); }
+    return PRODUCTS;
+  })();
+  try {
+    return await _productsFetchPromise;
+  } finally {
+    _productsFetchPromise = null;
+  }
 }
 
 let currentUser = null;
@@ -1522,6 +1533,10 @@ async function doLogin() {
   errEl.style.display = 'none';
   if (!uRaw || !p) { errEl.textContent = 'Completá usuario y contraseña.'; errEl.style.display='block'; return; }
   _loginBusy = true;
+  // Se dispara en paralelo con el login (no requiere sesión) para no esperar
+  // dos viajes seguidos al backend: cuando entra a la app, el catálogo ya
+  // está en camino o ya llegó.
+  fetchProducts();
   let res;
   try {
     res = await apiCall({ action:'login', usuario:uRaw, password:p });
