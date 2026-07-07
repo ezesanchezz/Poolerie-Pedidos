@@ -884,6 +884,7 @@ input.qty{width:70px;font-weight:600}
       <button class="bsm" onclick="openCfg()" id="btnCfgEmail" style="display:none">⚙️ Email</button>
       <button class="bsm admin-hbtn" onclick="openAdminPanel('users')" id="btnAdmin" style="display:none">🛠 Admin</button>
       <button class="bsm bsm-cuenta" onclick="openMiCuenta()" id="btnMiCuenta" style="display:none">⚙️ Mi cuenta</button>
+      <button class="bsm" onclick="downloadPriceList()" title="Descargar lista de precios en Excel">📄 Lista de precios</button>
       <button class="bsm" onclick="doLogout()">Salir</button>
     </div>
   </header>
@@ -1936,6 +1937,26 @@ function exportExcel(){
   const fname=`Pedido_${currentUser.razonSocial.replace(/[^a-zA-Z0-9]/g,'_')}_${fecha.replace(/\//g,'-')}.xlsx`;
   XLSX.writeFile(wbk,fname);
   showToast('✅ Excel descargado','ok');
+}
+
+// Lista de precios completa (Código, Descripción, Precio base USD) —
+// la pueden descargar los tres perfiles (cliente, vendedor, admin).
+// Mismo orden y mismo precio de lista base que la planilla de Google
+// Sheets (sin descuentos ni cálculos aplicados).
+function downloadPriceList(){
+  if (!PRODUCTS.length) { showToast('El catálogo todavía no está cargado.','err'); return; }
+  const rows = PRODUCTS.map(p => ({
+    'Código': p.codigo,
+    'Descripción': p.descripcion,
+    'Precio Lista Base (USD)': p.precio
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:52},{wch:22}];
+  const wbk = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wbk,ws,'Lista de precios');
+  const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
+  XLSX.writeFile(wbk, `Lista_de_precios_Poolerie_${fecha}.xlsx`);
+  showToast('✅ Lista de precios descargada','ok');
 }
 
 // ═══════════════════════════════════════════
