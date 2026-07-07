@@ -1957,7 +1957,7 @@ async function downloadPriceList(){
   ws.columns = [
     { header:'Código', key:'codigo', width:18 },
     { header:'Descripción', key:'descripcion', width:52 },
-    { header:'Precio Lista Base (USD)', key:'precio', width:24 }
+    { header:'Precio', key:'precio', width:24 }
   ];
   PRODUCTS.forEach(p => ws.addRow({ codigo:p.codigo, descripcion:p.descripcion, precio:p.precio }));
 
@@ -1979,7 +1979,7 @@ async function downloadPriceList(){
       cell.alignment = { horizontal:'center', vertical:'middle' };
       cell.border = fullBorder;
     });
-    row.getCell(3).numFmt = '0.00';
+    row.getCell(3).numFmt = '"US$" #,##0.00';
     if (i % 2 === 0) {
       row.eachCell(cell => { cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF0F5FB'} }; });
     }
