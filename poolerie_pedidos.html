@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Poolerie — Portal de Pedidos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- XLSX.js (arriba) no guarda estilos al escribir en su versión gratuita —
+     ExcelJS se usa solo para la lista de precios prolija, que sí necesita
+     negrita/bordes/centrado reales. El resto de los Excel (pedidos) siguen
+     con XLSX.js sin cambios. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Roboto:wght@400;500;700;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1943,19 +1948,52 @@ function exportExcel(){
 // la pueden descargar los tres perfiles (cliente, vendedor, admin).
 // Mismo orden y mismo precio de lista base que la planilla de Google
 // Sheets (sin descuentos ni cálculos aplicados).
-function downloadPriceList(){
+async function downloadPriceList(){
   if (!PRODUCTS.length) { showToast('El catálogo todavía no está cargado.','err'); return; }
-  const rows = PRODUCTS.map(p => ({
-    'Código': p.codigo,
-    'Descripción': p.descripcion,
-    'Precio Lista Base (USD)': p.precio
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{wch:16},{wch:52},{wch:22}];
-  const wbk = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wbk,ws,'Lista de precios');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Poolerie — Portal de Pedidos';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('Lista de precios');
+  ws.columns = [
+    { header:'Código', key:'codigo', width:18 },
+    { header:'Descripción', key:'descripcion', width:52 },
+    { header:'Precio Lista Base (USD)', key:'precio', width:24 }
+  ];
+  PRODUCTS.forEach(p => ws.addRow({ codigo:p.codigo, descripcion:p.descripcion, precio:p.precio }));
+
+  const thin = { style:'thin', color:{argb:'FFB9C6D6'} };
+  const fullBorder = { top:thin, bottom:thin, left:thin, right:thin };
+
+  const headerRow = ws.getRow(1);
+  headerRow.height = 22;
+  headerRow.eachCell(cell => {
+    cell.font = { bold:true, color:{argb:'FFFFFFFF'} };
+    cell.alignment = { horizontal:'center', vertical:'middle' };
+    cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0D6EBD'} };
+    cell.border = fullBorder;
+  });
+
+  for (let i=2; i<=ws.rowCount; i++){
+    const row = ws.getRow(i);
+    row.eachCell(cell => {
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+      cell.border = fullBorder;
+    });
+    row.getCell(3).numFmt = '0.00';
+    if (i % 2 === 0) {
+      row.eachCell(cell => { cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF0F5FB'} }; });
+    }
+  }
+  ws.views = [{ state:'frozen', ySplit:1 }]; // encabezado fijo al scrollear
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const fecha = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
-  XLSX.writeFile(wbk, `Lista_de_precios_Poolerie_${fecha}.xlsx`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Lista_de_precios_Poolerie_${fecha}.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
   showToast('✅ Lista de precios descargada','ok');
 }
 
