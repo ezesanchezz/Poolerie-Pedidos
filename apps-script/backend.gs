@@ -668,6 +668,29 @@ function updateUserFields(clave, fields) {
 }
 
 // ═══════════════════════════════════════════
+//  REPARACIÓN PUNTUAL — correr una sola vez a mano
+// ═══════════════════════════════════════════
+// Por un desajuste temporal del PEPPER, los 331 clientes originales (los
+// que se cargaron con migrarDatosIniciales) quedaron con el password
+// hasheado con un PEPPER distinto al que está en uso ahora — no podían
+// loguearse más. Esto vuelve a poner la contraseña de cada CLIENTE a su
+// valor inicial documentado (el CUIT, igual que el día 1), recalculada
+// con el PEPPER actual. Vendedores y admin NO se tocan acá.
+// Se corre UNA vez desde el desplegable de funciones de este editor
+// (▶ elegí "resetearContrasenasClientesIniciales", "Ejecutar").
+function resetearContrasenasClientesIniciales() {
+  const clientes = readAllUsers().filter(function (u) { return !u.esVendedor && !u.esAdmin; });
+  let count = 0;
+  clientes.forEach(function (u) {
+    const newPass = (u.cuit || '').replace(/-/g, '') || u.clave;
+    const salt = makeSalt();
+    updateUserFields(u.clave, { passwordHash: hashPassword(newPass, salt), salt: salt, passwordChanged: false });
+    count++;
+  });
+  Logger.log('Contraseñas reseteadas a su valor inicial: ' + count + ' clientes.');
+}
+
+// ═══════════════════════════════════════════
 //  MIGRACIÓN ÚNICA — correr una sola vez a mano
 // ═══════════════════════════════════════════
 // Carga los usuarios que hoy están hardcodeados en poolerie_pedidos.html.
