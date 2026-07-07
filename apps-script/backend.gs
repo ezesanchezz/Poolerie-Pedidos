@@ -70,8 +70,24 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// GET solo se usa para los links "Aprobar" / "Rechazar" del mail de
+// solicitud de alta (se abren directo desde el mail, no via fetch/JSON).
 function doGet(e) {
+  _sheetCache = null;
+  _usersCache = null;
+  const action = e.parameter.action;
+  if (action === 'approveClientRequest') return handleApproveClientRequest(e.parameter.token);
+  if (action === 'rejectClientRequest')  return handleRejectClientRequest(e.parameter.token);
   return ContentService.createTextOutput('Backend Poolerie OK');
+}
+
+function htmlPage(title, msg, color) {
+  return HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial,sans-serif;max-width:480px;margin:60px auto;text-align:center">' +
+      '<h2 style="color:' + (color || '#0D3B66') + '">' + title + '</h2>' +
+      '<p style="color:#475569;font-size:1rem">' + msg + '</p>' +
+    '</div>'
+  );
 }
 
 // ═══════════════════════════════════════════
@@ -343,11 +359,13 @@ function writeAllProducts(products) {
 // ═══════════════════════════════════════════
 //  SOLICITUDES DE ALTA DE CLIENTE (público, sin login)
 // ═══════════════════════════════════════════
-// Ojo: esto NO crea ninguna cuenta ni da acceso al portal. Solo le avisa
-// al admin por mail y deja un registro en la pestaña "Solicitudes" — el
-// alta real (acá y en SAP) la hace una persona a mano, después de revisar
-// que los datos sean reales. Así nadie puede autogenerarse acceso.
+// Esto NO crea la cuenta al momento de completar el formulario — solo le
+// avisa al admin por mail, con un botón "Aprobar". El alta real en el
+// portal (Usuarios) recién se crea cuando el admin toca ese botón desde
+// el mail; en SAP sigue siendo un paso aparte, manual. Así nadie puede
+// autogenerarse acceso cargando un CUIT/razón social inventados.
 const SOLICITUDES_SHEET_NAME = 'Solicitudes';
+const DESCUENTO_INICIAL_DEFAULT = 32.5;
 
 function handleRegisterClientRequest(data) {
   // Honeypot: los bots simples completan todos los campos de un form sin
@@ -369,15 +387,56 @@ function handleRegisterClientRequest(data) {
   if (!telefono) return { ok: false, error: 'Falta el teléfono de contacto.' };
 
   const fecha = new Date();
-  appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono);
+  const token = Utilities.getUuid();
+  appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono, token);
 
   const adminEmails = readAllUsers()
     .filter(function (u) { return u.esAdmin && u.email; })
     .map(function (u) { return u.email; });
   if (adminEmails.length) {
-    sendRegistrationEmail(adminEmails.join(','), { razonSocial: razonSocial, cuit: cuit, domicilio: domicilio, email: email, telefono: telefono, fecha: fecha });
+    sendRegistrationEmail(adminEmails.join(','), { razonSocial: razonSocial, cuit: cuit, domicilio: domicilio, email: email, telefono: telefono, fecha: fecha, token: token });
   }
   return { ok: true };
+}
+
+// El link "Aprobar" del mail llega acá vía GET. Da de alta al cliente en
+// la pestaña Usuarios (contraseña inicial = CUIT, mismo criterio que ya
+// se usa en el resto del sistema) y marca la solicitud como procesada.
+function handleApproveClientRequest(token) {
+  const sol = findSolicitudByToken(token);
+  if (!sol) return htmlPage('Enlace inválido', 'Este enlace no existe o ya fue usado.', '#E53E3E');
+  if (sol.estado !== 'Pendiente') return htmlPage('Ya procesada', 'Esta solicitud ya fue ' + sol.estado.toLowerCase() + ' anteriormente.', '#E53E3E');
+
+  const key = normalizeLogin(sol.razonSocial);
+  if (findUserRow(key)) {
+    updateSolicitudEstado(sol.rowNum, 'Error: ya existía un usuario con ese nombre');
+    return htmlPage('Ya existe un usuario', 'Ya hay un usuario cargado con ese nombre. Revisá manualmente desde el panel de Admin → Usuarios.', '#E53E3E');
+  }
+
+  const salt = makeSalt();
+  upsertUserRow({
+    clave: key, razonSocial: sol.razonSocial, cuit: sol.cuit, codigo: '',
+    passwordHash: hashPassword(sol.cuit, salt), salt: salt,
+    descuento: DESCUENTO_INICIAL_DEFAULT, esVendedor: false, esAdmin: false,
+    email: sol.email, passwordChanged: false
+  }, null);
+  updateSolicitudEstado(sol.rowNum, 'Aprobado');
+
+  return htmlPage(
+    '✅ Cliente aprobado',
+    'Se dio de alta a <strong>' + escHtml(sol.razonSocial) + '</strong> en el portal. ' +
+    'Contraseña inicial: <strong>' + escHtml(sol.cuit) + '</strong> (se le va a pedir que la cambie en su primer ingreso).<br><br>' +
+    'Recordá cargarlo también en SAP.',
+    '#1a9e5c'
+  );
+}
+
+function handleRejectClientRequest(token) {
+  const sol = findSolicitudByToken(token);
+  if (!sol) return htmlPage('Enlace inválido', 'Este enlace no existe o ya fue usado.', '#E53E3E');
+  if (sol.estado !== 'Pendiente') return htmlPage('Ya procesada', 'Esta solicitud ya fue ' + sol.estado.toLowerCase() + ' anteriormente.', '#E53E3E');
+  updateSolicitudEstado(sol.rowNum, 'Rechazado');
+  return htmlPage('Solicitud rechazada', 'No se creó ninguna cuenta para <strong>' + escHtml(sol.razonSocial) + '</strong>.', '#64748B');
 }
 
 function getSolicitudesSheet() {
@@ -385,13 +444,32 @@ function getSolicitudesSheet() {
   let sh = ss.getSheetByName(SOLICITUDES_SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(SOLICITUDES_SHEET_NAME);
-    sh.appendRow(['Fecha', 'RazonSocial', 'CUIT', 'Domicilio', 'Email', 'Telefono', 'Estado']);
+    sh.appendRow(['Fecha', 'RazonSocial', 'CUIT', 'Domicilio', 'Email', 'Telefono', 'Estado', 'ApprovalToken']);
   }
   return sh;
 }
 
-function appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono) {
-  getSolicitudesSheet().appendRow([fecha, razonSocial, cuit, domicilio, email, telefono, 'Pendiente']);
+function appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono, token) {
+  getSolicitudesSheet().appendRow([fecha, razonSocial, cuit, domicilio, email, telefono, 'Pendiente', token]);
+}
+
+function findSolicitudByToken(token) {
+  if (!token) return null;
+  const values = getSolicitudesSheet().getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    if (r[7] === token) {
+      return {
+        rowNum: i + 1, fecha: r[0], razonSocial: r[1], cuit: String(r[2] || ''),
+        domicilio: r[3], email: r[4], telefono: r[5], estado: r[6]
+      };
+    }
+  }
+  return null;
+}
+
+function updateSolicitudEstado(rowNum, estado) {
+  getSolicitudesSheet().getRange(rowNum, 7).setValue(estado);
 }
 
 function escHtml(s) {
@@ -402,6 +480,9 @@ function escHtml(s) {
 
 function sendRegistrationEmail(to, r) {
   const fechaStr = Utilities.formatDate(r.fecha, 'GMT-3', 'dd/MM/yyyy HH:mm');
+  const baseUrl = ScriptApp.getService().getUrl();
+  const approveUrl = baseUrl + '?action=approveClientRequest&token=' + encodeURIComponent(r.token);
+  const rejectUrl = baseUrl + '?action=rejectClientRequest&token=' + encodeURIComponent(r.token);
   const html =
     '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">' +
       '<div style="background:#0D6EBD;padding:16px 24px;border-radius:10px 10px 0 0">' +
@@ -417,8 +498,12 @@ function sendRegistrationEmail(to, r) {
           '<tr><td style="color:#64748B"><strong>Email</strong></td><td>' + escHtml(r.email) + '</td></tr>' +
           '<tr><td style="color:#64748B"><strong>Teléfono</strong></td><td>' + escHtml(r.telefono) + '</td></tr>' +
         '</table>' +
+        '<table cellpadding="0" cellspacing="0" style="margin-top:20px"><tr>' +
+          '<td style="padding-right:10px"><a href="' + approveUrl + '" style="display:inline-block;background:#1a9e5c;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:8px">✅ Aprobar y dar de alta</a></td>' +
+          '<td><a href="' + rejectUrl + '" style="display:inline-block;background:#F1F5F9;color:#475569;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:8px">✕ Rechazar</a></td>' +
+        '</tr></table>' +
         '<p style="color:#64748B;font-size:.85rem;margin-top:18px">' +
-          'Este cliente todavía NO tiene acceso al portal. Para darlo de alta, cargalo manualmente desde el panel de Admin → Usuarios (y en SAP, como corresponda).' +
+          'Al aprobar, el cliente queda dado de alta en el portal con contraseña inicial = su CUIT (se le va a pedir que la cambie al ingresar). Recordá cargarlo también en SAP.' +
         '</p>' +
       '</div>' +
     '</div>';
