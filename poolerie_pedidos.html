@@ -1812,7 +1812,7 @@ function renderTable() {
       ? `<button class="btn-detalle" onclick="openBreakdown('${esc(x.codigo)}')" title="Ver composición del producto">📋 Ver detalle</button>`
       : '';
     const thumb = x.imagen
-      ? `<img src="${esc(x.imagen)}" loading="lazy" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--border);display:block;margin-bottom:4px" alt=""/>`
+      ? `<img src="${esc(x.imagen)}" loading="lazy" style="width:52px;height:52px;object-fit:contain;border-radius:6px;border:1px solid var(--border);display:block;margin-bottom:4px;cursor:zoom-in;background:#fff" alt="" onclick="openImgLightbox('${esc(x.codigo)}')" title="Ver más grande"/>`
       : '';
     tr.innerHTML =
       `<td class="cod">${thumb}${esc(x.codigo)}</td>`+
@@ -1918,6 +1918,16 @@ function openBreakdown(cod){
   document.getElementById('breakdownModal').classList.add('open');
 }
 function closeBreakdown(){document.getElementById('breakdownModal').classList.remove('open');}
+
+function openImgLightbox(cod){
+  const prod = PRODUCTS.find(x => x.codigo === cod);
+  if (!prod || !prod.imagen) return;
+  document.getElementById('imgLightboxPic').src = prod.imagen;
+  document.getElementById('imgLightboxCod').textContent = cod;
+  document.getElementById('imgLightboxDesc').textContent = prod.descripcion;
+  document.getElementById('imgLightboxModal').classList.add('open');
+}
+function closeImgLightbox(){ document.getElementById('imgLightboxModal').classList.remove('open'); }
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function fmt(n){return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtARS(n){return '$ '+fmt(n);}
@@ -3323,6 +3333,16 @@ function saveCustomProducts() {
       </thead>
       <tbody id="bkBody"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- LIGHTBOX DE FOTO DE PRODUCTO -->
+<div class="modal-overlay" id="imgLightboxModal">
+  <div class="mcard mcard-sm" style="max-width:360px;text-align:center">
+    <img id="imgLightboxPic" src="" alt="" style="width:100%;max-width:280px;aspect-ratio:1/1;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff;margin:0 auto 12px;display:block"/>
+    <div class="cod" id="imgLightboxCod" style="font-weight:700;margin-bottom:4px"></div>
+    <div id="imgLightboxDesc" style="color:var(--muted);font-size:.9rem;margin-bottom:16px"></div>
+    <button class="bcancel" onclick="closeImgLightbox()">Cerrar</button>
   </div>
 </div>
 </body>
