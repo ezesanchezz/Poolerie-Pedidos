@@ -356,6 +356,10 @@ function writeAllProducts(products) {
   sh.getRange(1, 1, 1, header.length).setValues([header]);
   const rows = products.map(function (p) { return [p.codigo, p.descripcion, p.categoria, p.precio, p.moneda]; });
   if (rows.length) {
+    // Texto plano en Código/Descripción/Categoría antes de escribir, para
+    // que un código o nombre que arranque con +, -, = o @ no se guarde
+    // como "#ERROR!" (mismo bug que en Usuarios, ver upsertUserRow).
+    sh.getRange(2, 1, rows.length, 3).setNumberFormat('@');
     sh.getRange(2, 1, rows.length, header.length).setValues(rows);
   }
 }
@@ -454,7 +458,13 @@ function getSolicitudesSheet() {
 }
 
 function appendSolicitud(fecha, razonSocial, cuit, domicilio, email, telefono, token) {
-  getSolicitudesSheet().appendRow([fecha, razonSocial, cuit, domicilio, email, telefono, 'Pendiente', token]);
+  const sh = getSolicitudesSheet();
+  const targetRow = sh.getLastRow() + 1;
+  // Texto plano en las columnas de texto libre antes de escribir — un
+  // cliente que cargue su razón social/domicilio arrancando con +, -, =
+  // o @ no debería romper la fila (mismo bug que en Usuarios).
+  [2, 3, 4, 5, 6].forEach(function (col) { sh.getRange(targetRow, col).setNumberFormat('@'); });
+  sh.getRange(targetRow, 1, 1, 8).setValues([[fecha, razonSocial, cuit, domicilio, email, telefono, 'Pendiente', token]]);
 }
 
 function findSolicitudByToken(token) {
@@ -652,11 +662,14 @@ function upsertUserRow(row, rowNum) {
   const sh = getUsersSheet();
   const values = [row.clave, row.razonSocial, row.cuit, row.codigo, row.passwordHash, row.salt,
     row.descuento, row.esVendedor, row.esAdmin, row.email, row.passwordChanged];
-  if (rowNum) {
-    sh.getRange(rowNum, 1, 1, values.length).setValues([values]);
-  } else {
-    sh.appendRow(values);
-  }
+  const targetRow = rowNum || (sh.getLastRow() + 1);
+  // Forzar texto plano en las columnas de texto libre ANTES de escribir,
+  // para que Sheets no intente interpretar como fórmula un valor que
+  // arranca con +, -, = o @ (pasó con "+ PILETAS S.A.S." → quedó como
+  // "#ERROR!" en la planilla). Tiene que ir antes del setValues: cambiar
+  // el formato después no arregla un valor que ya quedó mal guardado.
+  [1, 2, 3, 4, 10].forEach(function (col) { sh.getRange(targetRow, col).setNumberFormat('@'); });
+  sh.getRange(targetRow, 1, 1, values.length).setValues([values]);
   _usersCache = null; // la próxima lectura en esta misma ejecución debe ver el cambio
 }
 
