@@ -398,9 +398,15 @@ const PRODUCT_IMAGES_FOLDER_NAME = 'Poolerie - Fotos de productos';
 // Correr UNA vez a mano desde el editor (▶ elegí esta función, "Ejecutar")
 // para que aparezca el cartel de autorización y aceptar el permiso de
 // Drive — recién usado por primera vez acá. Sin este paso, subir fotos
-// falla con "No tienes permiso para llamar a DriveApp...".
+// falla con "No tienes permiso para llamar a DriveApp...". Toca las
+// mismas operaciones que usa la subida real (crear carpeta/archivo y
+// compartirlo) para que Google pida el permiso de escritura completo
+// de una sola vez, no solo lectura.
 function autorizarPermisosDrive() {
-  DriveApp.getRootFolder();
+  const folder = getProductImagesFolder();
+  const testFile = folder.createFile(Utilities.newBlob('test', 'text/plain', 'test-autorizacion.txt'));
+  testFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  testFile.setTrashed(true);
   Logger.log('Drive autorizado correctamente.');
 }
 
