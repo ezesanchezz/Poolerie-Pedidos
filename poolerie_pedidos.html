@@ -3111,21 +3111,36 @@ async function subirFotosDesdeExcel(file) {
     // Columna B (col0===1) es la columna "Imagen" real de productos — la A
     // (col0===0) suele ser el logo de encabezado, no un producto.
     const matched = anchors.filter(a => a.col0 === 1 && a.target);
+
+    // Celdas combinadas en la columna Imagen: varias filas (productos con
+    // código/descripción/precio distintos) comparten una sola foto pegada
+    // una vez en el bloque combinado. Sin esto, solo el primer producto del
+    // bloque se quedaba con la imagen.
+    const mergesColB = (ws['!merges'] || []).filter(m => m.s.c === 1 && m.e.c === 1);
+    function filasDelBloque(row0) {
+      const merge = mergesColB.find(m => row0 >= m.s.r && row0 <= m.e.r);
+      if (!merge) return [row0];
+      const filas = [];
+      for (let r = merge.s.r; r <= merge.e.r; r++) filas.push(r);
+      return filas;
+    }
+
     const items = [];
     for (let i = 0; i < matched.length; i++) {
       const a = matched[i];
-      const excelRow = a.row0 + 1;
-      const cell = ws['A' + excelRow];
-      const codigo = cell ? String(cell.v).trim() : '';
-      if (!codigo) continue;
       const mediaPath = a.target.replace('../', 'xl/');
       const zf = zip.file(mediaPath);
       if (!zf) continue;
       setStatus(`Procesando fotos... (${i + 1}/${matched.length})`);
+      let dataUrl;
       try {
-        const dataUrl = await resizeImageDataUrl(await zf.async('base64'), mediaPath);
-        items.push({ codigo, dataUrl });
-      } catch (e) { /* si una foto puntual falla, se sigue con las demás */ }
+        dataUrl = await resizeImageDataUrl(await zf.async('base64'), mediaPath);
+      } catch (e) { continue; /* si una foto puntual falla, se sigue con las demás */ }
+      filasDelBloque(a.row0).forEach(row0 => {
+        const cell = ws['A' + (row0 + 1)];
+        const codigo = cell ? String(cell.v).trim() : '';
+        if (codigo) items.push({ codigo, dataUrl });
+      });
     }
 
     if (!items.length) { setStatus('No se pudo relacionar ninguna foto con un código de producto.'); return; }
