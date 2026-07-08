@@ -395,6 +395,15 @@ function writeAllProducts(products) {
 // URL en la columna Imagen de Productos — no toca precios ni categorías.
 const PRODUCT_IMAGES_FOLDER_NAME = 'Poolerie - Fotos de productos';
 
+// Correr UNA vez a mano desde el editor (▶ elegí esta función, "Ejecutar")
+// para que aparezca el cartel de autorización y aceptar el permiso de
+// Drive — recién usado por primera vez acá. Sin este paso, subir fotos
+// falla con "No tienes permiso para llamar a DriveApp...".
+function autorizarPermisosDrive() {
+  DriveApp.getRootFolder();
+  Logger.log('Drive autorizado correctamente.');
+}
+
 function getProductImagesFolder() {
   const folders = DriveApp.getFoldersByName(PRODUCT_IMAGES_FOLDER_NAME);
   if (folders.hasNext()) return folders.next();
