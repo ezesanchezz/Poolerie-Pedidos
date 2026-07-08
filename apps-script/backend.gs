@@ -433,7 +433,7 @@ function handleUploadProductImages(data) {
       while (existentes.hasNext()) { existentes.next().setTrashed(true); } // reemplaza la foto vieja de este código
       const file = folder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      urlByCodigo[item.codigo] = 'https://lh3.googleusercontent.com/d/' + file.getId();
+      urlByCodigo[item.codigo] = 'https://drive.google.com/uc?export=view&id=' + file.getId();
     } catch (e) {
       errores++;
     }
