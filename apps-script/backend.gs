@@ -71,6 +71,7 @@ function doPost(e) {
       case 'importClients':  result = handleImportClients(data); break;
       case 'getProducts':    result = handleGetProducts(data); break;
       case 'refreshPrices':  result = handleRefreshPrices(data); break;
+      case 'uploadProductImages': result = handleUploadProductImages(data); break;
       case 'registerClientRequest': result = handleRegisterClientRequest(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
@@ -335,7 +336,9 @@ function getProductsSheet() {
   let sh = ss.getSheetByName(PRODUCTS_SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(PRODUCTS_SHEET_NAME);
-    sh.appendRow(['Codigo', 'Descripcion', 'Categoria', 'Precio', 'Moneda']);
+    sh.appendRow(['Codigo', 'Descripcion', 'Categoria', 'Precio', 'Moneda', 'Imagen']);
+  } else if (!sh.getRange(1, 6).getValue()) {
+    sh.getRange(1, 6).setValue('Imagen'); // sheet viejo, sin esta columna todavía
   }
   return sh;
 }
@@ -351,18 +354,29 @@ function readAllProducts() {
       descripcion: String(r[1] || ''),
       categoria: String(r[2] || ''),
       precio: parseFloat(r[3]) || 0,
-      moneda: String(r[4] || 'US$')
+      moneda: String(r[4] || 'US$'),
+      imagen: String(r[5] || '')
     });
   }
   return products;
 }
 
+// Al republicar el catálogo (refreshPrices) se conservan las fotos ya
+// subidas — se guardan por código ANTES de borrar la hoja, y se les
+// reasignan a las filas nuevas si el producto que llega no trae una
+// propia (nunca la trae: refreshPrices no sabe de fotos).
 function writeAllProducts(products) {
+  const existingImages = {};
+  try {
+    readAllProducts().forEach(function (p) { if (p.imagen) existingImages[p.codigo] = p.imagen; });
+  } catch (e) {}
   const sh = getProductsSheet();
   sh.clearContents();
-  const header = ['Codigo', 'Descripcion', 'Categoria', 'Precio', 'Moneda'];
+  const header = ['Codigo', 'Descripcion', 'Categoria', 'Precio', 'Moneda', 'Imagen'];
   sh.getRange(1, 1, 1, header.length).setValues([header]);
-  const rows = products.map(function (p) { return [p.codigo, p.descripcion, p.categoria, p.precio, p.moneda]; });
+  const rows = products.map(function (p) {
+    return [p.codigo, p.descripcion, p.categoria, p.precio, p.moneda, p.imagen || existingImages[p.codigo] || ''];
+  });
   if (rows.length) {
     // Texto plano en Código/Descripción/Categoría antes de escribir, para
     // que un código o nombre que arranque con +, -, = o @ no se guarde
@@ -370,6 +384,57 @@ function writeAllProducts(products) {
     sh.getRange(2, 1, rows.length, 3).setNumberFormat('@');
     sh.getRange(2, 1, rows.length, header.length).setValues(rows);
   }
+}
+
+// ═══════════════════════════════════════════
+//  FOTOS DE PRODUCTO (subidas desde el Excel de precios)
+// ═══════════════════════════════════════════
+// El navegador extrae las fotos del .xlsx (columna Imagen, ver
+// subirFotosDesdeExcel() en el HTML) y las manda acá en tandas chicas ya
+// redimensionadas. Esto solo las sube a una carpeta de Drive y guarda la
+// URL en la columna Imagen de Productos — no toca precios ni categorías.
+const PRODUCT_IMAGES_FOLDER_NAME = 'Poolerie - Fotos de productos';
+
+function getProductImagesFolder() {
+  const folders = DriveApp.getFoldersByName(PRODUCT_IMAGES_FOLDER_NAME);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(PRODUCT_IMAGES_FOLDER_NAME);
+}
+
+function handleUploadProductImages(data) {
+  const check = requireAdmin(data);
+  if (check.error) return check.error;
+  const items = data.items || [];
+  if (!items.length) return { ok: false, error: 'No se recibió ninguna imagen.' };
+
+  const folder = getProductImagesFolder();
+  const urlByCodigo = {};
+  let errores = 0;
+  items.forEach(function (item) {
+    try {
+      const bytes = Utilities.base64Decode(item.base64);
+      const blob = Utilities.newBlob(bytes, 'image/jpeg', item.codigo + '.jpg');
+      const existentes = folder.getFilesByName(item.codigo + '.jpg');
+      while (existentes.hasNext()) { existentes.next().setTrashed(true); } // reemplaza la foto vieja de este código
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      urlByCodigo[item.codigo] = 'https://lh3.googleusercontent.com/d/' + file.getId();
+    } catch (e) {
+      errores++;
+    }
+  });
+
+  const sh = getProductsSheet();
+  const values = sh.getDataRange().getValues();
+  let actualizados = 0;
+  for (let i = 1; i < values.length; i++) {
+    const codigo = String(values[i][0] || '');
+    if (urlByCodigo[codigo]) {
+      sh.getRange(i + 1, 6).setValue(urlByCodigo[codigo]);
+      actualizados++;
+    }
+  }
+  return { ok: true, subidas: Object.keys(urlByCodigo).length, actualizados: actualizados, errores: errores };
 }
 
 // ═══════════════════════════════════════════

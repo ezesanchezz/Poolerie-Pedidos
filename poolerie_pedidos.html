@@ -10,6 +10,11 @@
      negrita/bordes/centrado reales. El resto de los Excel (pedidos) siguen
      con XLSX.js sin cambios. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<!-- JSZip: para leer directo el .xlsx de fotos de producto (las fotos viven
+     adentro del archivo como imágenes ancladas a filas — no hay forma de
+     leerlas desde Google Sheets, así que se procesan del lado del cliente,
+     ver subirFotosDesdeExcel() más abajo). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Roboto:wght@400;500;700;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1806,8 +1811,11 @@ function renderTable() {
     const bomBtn = PRODUCT_BREAKDOWN[x.codigo]
       ? `<button class="btn-detalle" onclick="openBreakdown('${esc(x.codigo)}')" title="Ver composición del producto">📋 Ver detalle</button>`
       : '';
+    const thumb = x.imagen
+      ? `<img src="${esc(x.imagen)}" loading="lazy" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--border);display:block;margin-bottom:4px" alt=""/>`
+      : '';
     tr.innerHTML =
-      `<td class="cod">${esc(x.codigo)}</td>`+
+      `<td class="cod">${thumb}${esc(x.codigo)}</td>`+
       `<td>${dh}${bomBtn}<br><span style="color:#94A3B8;font-size:.72rem">USD lista: ${fmtUSD(x.precio)}</span></td>`+
       `<td class="price-cell"><div class="price-ars">${fmtARS(arsConIVA)}</div><div>${dtoBadge}</div></td>`+
       `<td style="text-align:center"><input class="qty${qty?' hv':''}" type="number" min="0" step="1" value="${qty}" data-cod="${esc(x.codigo)}" oninput="onQty(this)"/></td>`+
@@ -2992,6 +3000,7 @@ async function adminDeleteUser(key) {
 function renderAdminPrices(el) {
   if(!currentUser?.isAdmin) return;
   const updated = _productsUpdatedAt ? new Date(_productsUpdatedAt).toLocaleString('es-AR') : 'nunca';
+  const conFoto = PRODUCTS.filter(p => p.imagen).length;
   el.innerHTML = `
     <div class="admin-toolbar">
       <button class="admin-btn-save big" onclick="adminRefreshPricesFromSheet()">🔄 Actualizar precios desde Google Sheets</button>
@@ -3002,6 +3011,18 @@ function renderAdminPrices(el) {
       Última actualización: <strong>${esc(updated)}</strong> &middot; catálogo actual: <strong>${PRODUCTS.length}</strong> productos.
     </p>
     <div id="adminPriceRefreshResult"></div>
+
+    <hr style="margin:24px 0;border:none;border-top:1px solid var(--border)">
+
+    <h4 style="margin:0 0 8px;color:var(--blue-dark);font-size:.82rem;text-transform:uppercase;letter-spacing:.5px">📷 Fotos de producto</h4>
+    <p style="color:var(--muted);font-size:.9rem;margin:0 0 12px">
+      Subí el Excel de precios (el archivo .xlsx original, no la planilla de Google Sheets) para extraer las fotos
+      pegadas en la columna Imagen y publicarlas junto a cada producto. No toca precios ni categorías.<br>
+      Productos con foto actualmente: <strong>${conFoto} / ${PRODUCTS.length}</strong>.
+    </p>
+    <input type="file" id="fotosExcelInput" accept=".xlsx" style="display:none" onchange="subirFotosDesdeExcel(this.files[0])"/>
+    <button class="admin-btn-save" id="btnSubirFotos" onclick="document.getElementById('fotosExcelInput').click()">📁 Elegir Excel y subir fotos</button>
+    <div id="adminFotosResult" style="margin-top:12px;font-size:.85rem;color:var(--muted)"></div>
   `;
 }
 
@@ -3023,6 +3044,127 @@ async function adminRefreshPricesFromSheet() {
   renderTable();
   showToast(`✅ Catálogo actualizado: ${res.count} productos, ${res.categorias} categorías`,'ok');
   openAdminPanel('prices');
+}
+
+// ═══════════════════════════════════════════
+//  FOTOS DE PRODUCTO — extracción del .xlsx en el navegador
+// ═══════════════════════════════════════════
+// Las fotos de la planilla de precios están ancladas a filas adentro del
+// archivo .xlsx (formato OOXML: xl/drawings/drawingN.xml + xl/media/*),
+// no como link ni como celda leíble por Google Sheets — por eso hace falta
+// procesar el Excel original acá, del lado del cliente, en vez de pedirle
+// esto al backend de Apps Script (que solo puede leer Google Sheets).
+function xmlDoc(text) {
+  return new DOMParser().parseFromString(text, 'application/xml');
+}
+
+async function subirFotosDesdeExcel(file) {
+  if (!currentUser?.isAdmin || !file) return;
+  const resultEl = document.getElementById('adminFotosResult');
+  const btn = document.getElementById('btnSubirFotos');
+  const setStatus = (msg) => { if (resultEl) resultEl.textContent = msg; };
+  if (btn) btn.disabled = true;
+  try {
+    setStatus('Leyendo el archivo...');
+    const buf = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+
+    const drawingPath = Object.keys(zip.files).find(n => /^xl\/drawings\/drawing\d+\.xml$/.test(n));
+    if (!drawingPath) { setStatus('No se encontraron fotos ancladas en este Excel.'); return; }
+    const relsPath = drawingPath.replace('drawings/', 'drawings/_rels/') + '.rels';
+
+    const drawingXml = xmlDoc(await zip.file(drawingPath).async('text'));
+    const relsXml = xmlDoc(await zip.file(relsPath).async('text'));
+
+    const ridToTarget = {};
+    Array.from(relsXml.getElementsByTagName('Relationship')).forEach(r => {
+      ridToTarget[r.getAttribute('Id')] = r.getAttribute('Target');
+    });
+
+    const anchors = [];
+    ['xdr:twoCellAnchor', 'xdr:oneCellAnchor'].forEach(tag => {
+      Array.from(drawingXml.getElementsByTagName(tag)).forEach(anchor => {
+        const from = anchor.getElementsByTagName('xdr:from')[0];
+        if (!from) return;
+        const row0 = parseInt(from.getElementsByTagName('xdr:row')[0].textContent, 10);
+        const col0 = parseInt(from.getElementsByTagName('xdr:col')[0].textContent, 10);
+        const blip = anchor.getElementsByTagName('a:blip')[0];
+        const rid = blip ? blip.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed') : null;
+        anchors.push({ row0, col0, target: rid ? ridToTarget[rid] : null });
+      });
+    });
+
+    setStatus(`Encontradas ${anchors.length} imágenes ancladas. Leyendo la lista de precios...`);
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+
+    // Columna B (col0===1) es la columna "Imagen" real de productos — la A
+    // (col0===0) suele ser el logo de encabezado, no un producto.
+    const matched = anchors.filter(a => a.col0 === 1 && a.target);
+    const items = [];
+    for (let i = 0; i < matched.length; i++) {
+      const a = matched[i];
+      const excelRow = a.row0 + 1;
+      const cell = ws['A' + excelRow];
+      const codigo = cell ? String(cell.v).trim() : '';
+      if (!codigo) continue;
+      const mediaPath = a.target.replace('../', 'xl/');
+      const zf = zip.file(mediaPath);
+      if (!zf) continue;
+      setStatus(`Procesando fotos... (${i + 1}/${matched.length})`);
+      try {
+        const base64Thumb = await resizeImageBase64(await zf.async('base64'), mediaPath);
+        items.push({ codigo, base64: base64Thumb });
+      } catch (e) { /* si una foto puntual falla, se sigue con las demás */ }
+    }
+
+    if (!items.length) { setStatus('No se pudo relacionar ninguna foto con un código de producto.'); return; }
+
+    setStatus(`Subiendo ${items.length} fotos...`);
+    const TANDA = 15;
+    let subidas = 0;
+    for (let i = 0; i < items.length; i += TANDA) {
+      const lote = items.slice(i, i + TANDA);
+      const res = await apiCall({ action: 'uploadProductImages', token: sessionToken, items: lote });
+      if (res.ok) subidas += res.subidas;
+      setStatus(`Subiendo fotos... (${Math.min(i + TANDA, items.length)}/${items.length})`);
+    }
+
+    await fetchProducts(true);
+    renderTable();
+    setStatus(`✅ Listo: ${subidas} fotos subidas y publicadas.`);
+    showToast(`✅ ${subidas} fotos de producto subidas`, 'ok');
+    openAdminPanel('prices');
+  } catch (e) {
+    setStatus('Error procesando el archivo: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Redimensiona a una miniatura liviana (máx 160x160, JPEG calidad .7) antes
+// de mandarla al servidor — las fotos originales pesan demasiado para subir
+// ~100 juntas y no hace falta más resolución que la de una miniatura.
+function resizeImageBase64(base64, mediaPath) {
+  return new Promise((resolve, reject) => {
+    const ext = mediaPath.split('.').pop().toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+    const img = new Image();
+    img.onload = () => {
+      const maxSide = 160;
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // fondo blanco por si el PNG tiene transparencia
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = `data:${mime};base64,${base64}`;
+  });
 }
 
 // ─── TAB PRODUCTOS ───────────────────────────
