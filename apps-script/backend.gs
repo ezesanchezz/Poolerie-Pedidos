@@ -7,9 +7,13 @@
  * misma planilla, en vez de tener los datos de clientes adentro del HTML.
  *
  * CONFIGURACIÓN ANTES DE USAR (una sola vez):
- * 1. Cambiá PEPPER de abajo por cualquier texto largo al azar, y no lo
- *    vuelvas a tocar nunca más (si lo cambiás después de la migración,
- *    todas las contraseñas existentes dejan de funcionar).
+ * 1. El secreto PEPPER vive en "Propiedades del script" (⚙️ Configuración
+ *    del proyecto, en el editor de Apps Script), NO en este archivo — así,
+ *    pegar una versión nueva del código nunca lo pisa por accidente. Andá
+ *    a Configuración del proyecto → Propiedades del script → Agregar
+ *    propiedad de script → nombre "PEPPER", valor: cualquier texto largo
+ *    al azar. Una sola vez, no lo vuelvas a tocar (si cambia, todas las
+ *    contraseñas existentes dejan de funcionar).
  * 2. SPREADSHEET_ID ya está completado con el ID de la planilla real
  *    (este script es standalone, no está atado a ninguna Sheet, así que
  *    no puede usar "la planilla activa" — necesita el ID explícito).
@@ -21,7 +25,11 @@
  *    y pasale la URL nueva a Claude.
  */
 
-const PEPPER = 'CAMBIAR_ESTO_POR_UN_TEXTO_LARGO_AL_AZAR_UNA_SOLA_VEZ';
+function getPepper() {
+  const p = PropertiesService.getScriptProperties().getProperty('PEPPER');
+  if (!p) throw new Error('Falta configurar la propiedad de script "PEPPER" (Configuración del proyecto → Propiedades del script).');
+  return p;
+}
 const SPREADSHEET_ID = '1HQZdQST90P23rZegQ0TRxi6etoQMOOch';
 const USERS_SHEET_NAME = 'Usuarios';
 const PRODUCTS_SHEET_NAME = 'Productos'; // catálogo "publicado", vive en esta misma planilla
@@ -633,7 +641,7 @@ function makeSalt() {
 function hashPassword(password, salt) {
   const bytes = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
-    password + salt + PEPPER,
+    password + salt + getPepper(),
     Utilities.Charset.UTF_8
   );
   return bytes.map(function (b) {
