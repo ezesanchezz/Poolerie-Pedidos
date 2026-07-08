@@ -63,6 +63,7 @@ function doPost(e) {
       case 'importClients':  result = handleImportClients(data); break;
       case 'getProducts':    result = handleGetProducts(data); break;
       case 'refreshPrices':  result = handleRefreshPrices(data); break;
+      case 'previewProductImages': result = handlePreviewProductImages(data); break; // PROTOTIPO temporal, ver comentario en la función
       case 'registerClientRequest': result = handleRegisterClientRequest(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
@@ -320,6 +321,55 @@ function handleRefreshPrices(data) {
   const now = new Date().toISOString();
   PropertiesService.getScriptProperties().setProperty('PRODUCTS_UPDATED_AT', now);
   return { ok: true, count: products.length, categorias: categoriasDetectadas, updatedAt: now };
+}
+
+// ═══════════════════════════════════════════
+//  PROTOTIPO TEMPORAL — fotos de producto
+// ═══════════════════════════════════════════
+// Solo para probar cómo se ven las fotos antes de decidir si se suman de
+// verdad al catálogo. Las fotos de la planilla de precios están pegadas
+// "sobre" la celda (no son un link ni un =IMAGE(...)), así que no se
+// pueden leer con getValues() — Sheet.getImages() sí las devuelve como
+// objetos ancla-a-fila, de ahí se saca el blob y se manda como base64.
+// Trae solo una muestra chica (8) para no cargar de más; si se decide
+// avanzar en serio, esto se rediseña para guardar las fotos en Drive en
+// vez de mandar base64 pesado en cada respuesta.
+function handlePreviewProductImages(data) {
+  const check = requireAdmin(data);
+  if (check.error) return check.error;
+  let priceSheet;
+  try {
+    const priceSs = SpreadsheetApp.openById(PRICE_SPREADSHEET_ID);
+    priceSheet = priceSs.getSheets().find(function (s) { return s.getSheetId() === PRICE_SHEET_GID; });
+  } catch (e) {
+    return { ok: false, error: 'No se pudo abrir la planilla de precios: ' + e.message };
+  }
+  if (!priceSheet) return { ok: false, error: 'No se encontró la hoja de precios.' };
+
+  const images = priceSheet.getImages();
+  if (!images.length) {
+    return { ok: true, totalImages: 0, samples: [], nota: 'getImages() no encontró ninguna imagen flotante en la hoja.' };
+  }
+  const values = priceSheet.getDataRange().getValues();
+  const limit = Math.min(images.length, 8);
+  const samples = [];
+  for (let i = 0; i < limit; i++) {
+    const img = images[i];
+    let rowNum = null, codigo = '', descripcion = '', base64 = null, contentType = null;
+    try {
+      rowNum = img.getAnchorCell().getRow();
+      const rowValues = values[rowNum - 1] || [];
+      codigo = String(rowValues[0] || '').trim();
+      descripcion = String(rowValues[2] || '').trim();
+      const blob = img.getBlob();
+      base64 = Utilities.base64Encode(blob.getBytes());
+      contentType = blob.getContentType();
+    } catch (e) {
+      descripcion = 'Error leyendo esta imagen: ' + e.message;
+    }
+    samples.push({ row: rowNum, codigo: codigo, descripcion: descripcion, base64: base64, contentType: contentType });
+  }
+  return { ok: true, totalImages: images.length, samples: samples };
 }
 
 function getProductsSheet() {
