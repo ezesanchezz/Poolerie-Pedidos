@@ -355,29 +355,57 @@ function handlePreviewProductImages(data) {
   if (!priceSheet) return { ok: false, error: 'No se encontró la hoja de precios.' };
 
   const images = priceSheet.getImages();
-  if (!images.length) {
-    return { ok: true, totalImages: 0, samples: [], nota: 'getImages() no encontró ninguna imagen flotante en la hoja.' };
-  }
   const values = priceSheet.getDataRange().getValues();
   const limit = Math.min(images.length, 8);
   const samples = [];
   for (let i = 0; i < limit; i++) {
     const img = images[i];
-    let rowNum = null, codigo = '', descripcion = '', base64 = null, contentType = null;
+    let rowNum = null, codigo = '', descripcion = '', base64 = null, contentType = null, metodo = null;
     try {
       rowNum = img.getAnchorCell().getRow();
       const rowValues = values[rowNum - 1] || [];
       codigo = String(rowValues[0] || '').trim();
-      descripcion = String(rowValues[2] || '').trim();
-      const blob = img.getBlob();
-      base64 = Utilities.base64Encode(blob.getBytes());
-      contentType = blob.getContentType();
+      // Diagnóstico: probar varios métodos posibles, capturar cuál funciona.
+      const disponibles = [];
+      for (const m of ['getBlob', 'getAs', 'getUrl']) { if (typeof img[m] === 'function') disponibles.push(m); }
+      if (typeof img.getBlob === 'function') {
+        const blob = img.getBlob();
+        base64 = Utilities.base64Encode(blob.getBytes());
+        contentType = blob.getContentType();
+        metodo = 'getBlob';
+      } else if (typeof img.getAs === 'function') {
+        const blob = img.getAs('image/png');
+        base64 = Utilities.base64Encode(blob.getBytes());
+        contentType = blob.getContentType();
+        metodo = 'getAs';
+      } else if (typeof img.getUrl === 'function') {
+        descripcion = 'Sin blob directo — URL: ' + img.getUrl();
+        metodo = 'getUrl';
+      }
+      descripcion = descripcion || ('Métodos disponibles en el objeto imagen: ' + disponibles.join(', '));
     } catch (e) {
-      descripcion = 'Error leyendo esta imagen: ' + e.message;
+      descripcion = 'Error leyendo esta imagen (método ' + metodo + '): ' + e.message;
     }
-    samples.push({ row: rowNum, codigo: codigo, descripcion: descripcion, base64: base64, contentType: contentType });
+    samples.push({ row: rowNum, codigo: codigo, descripcion: descripcion, base64: base64, contentType: contentType, metodo: metodo });
   }
-  return { ok: true, totalImages: images.length, samples: samples };
+
+  // Diagnóstico extra: ¿hay imágenes "insertadas en la celda" (la función
+  // nueva de Sheets, que getImages() NO detecta)? Se intenta vía el
+  // servicio avanzado de Sheets, si está habilitado en el proyecto.
+  let celdaImagenNota = 'No se pudo revisar (sin el servicio avanzado de Sheets habilitado).';
+  try {
+    if (typeof Sheets !== 'undefined') {
+      const meta = Sheets.Spreadsheets.get(PRICE_SPREADSHEET_ID, {
+        ranges: [priceSheet.getName() + '!B1:B10'],
+        fields: 'sheets.data.rowData.values(userEnteredValue,effectiveValue)'
+      });
+      celdaImagenNota = JSON.stringify(meta.sheets[0].data[0].rowData || []).slice(0, 500);
+    }
+  } catch (e) {
+    celdaImagenNota = 'Error consultando Sheets API avanzada: ' + e.message;
+  }
+
+  return { ok: true, totalImages: images.length, samples: samples, celdaImagenNota: celdaImagenNota };
 }
 
 function getProductsSheet() {
