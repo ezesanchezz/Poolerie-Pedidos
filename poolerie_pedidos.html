@@ -3113,8 +3113,8 @@ async function subirFotosDesdeExcel(file) {
       if (!zf) continue;
       setStatus(`Procesando fotos... (${i + 1}/${matched.length})`);
       try {
-        const base64Thumb = await resizeImageBase64(await zf.async('base64'), mediaPath);
-        items.push({ codigo, base64: base64Thumb });
+        const dataUrl = await resizeImageDataUrl(await zf.async('base64'), mediaPath);
+        items.push({ codigo, dataUrl });
       } catch (e) { /* si una foto puntual falla, se sigue con las demás */ }
     }
 
@@ -3142,10 +3142,13 @@ async function subirFotosDesdeExcel(file) {
   }
 }
 
-// Redimensiona a una miniatura liviana (máx 160x160, JPEG calidad .7) antes
-// de mandarla al servidor — las fotos originales pesan demasiado para subir
-// ~100 juntas y no hace falta más resolución que la de una miniatura.
-function resizeImageBase64(base64, mediaPath) {
+// Redimensiona a una miniatura liviana (máx 160x160, JPEG calidad .7) y la
+// deja como data URI completa ("data:image/jpeg;base64,...") — se guarda
+// embebida tal cual en la planilla, en vez de subirla a un hosting externo
+// (Drive bloquea mostrarla en otro sitio con su header
+// Cross-Origin-Resource-Policy: same-site, algo que no se puede evitar
+// desde acá).
+function resizeImageDataUrl(base64, mediaPath) {
   return new Promise((resolve, reject) => {
     const ext = mediaPath.split('.').pop().toLowerCase();
     const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
@@ -3160,7 +3163,7 @@ function resizeImageBase64(base64, mediaPath) {
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); // fondo blanco por si el PNG tiene transparencia
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
     img.onerror = reject;
     img.src = `data:${mime};base64,${base64}`;

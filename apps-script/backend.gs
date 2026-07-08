@@ -390,53 +390,26 @@ function writeAllProducts(products) {
 //  FOTOS DE PRODUCTO (subidas desde el Excel de precios)
 // ═══════════════════════════════════════════
 // El navegador extrae las fotos del .xlsx (columna Imagen, ver
-// subirFotosDesdeExcel() en el HTML) y las manda acá en tandas chicas ya
-// redimensionadas. Esto solo las sube a una carpeta de Drive y guarda la
-// URL en la columna Imagen de Productos — no toca precios ni categorías.
-const PRODUCT_IMAGES_FOLDER_NAME = 'Poolerie - Fotos de productos';
-
-// Correr UNA vez a mano desde el editor (▶ elegí esta función, "Ejecutar")
-// para que aparezca el cartel de autorización y aceptar el permiso de
-// Drive — recién usado por primera vez acá. Sin este paso, subir fotos
-// falla con "No tienes permiso para llamar a DriveApp...". Toca las
-// mismas operaciones que usa la subida real (crear carpeta/archivo y
-// compartirlo) para que Google pida el permiso de escritura completo
-// de una sola vez, no solo lectura.
-function autorizarPermisosDrive() {
-  const folder = getProductImagesFolder();
-  const testFile = folder.createFile(Utilities.newBlob('test', 'text/plain', 'test-autorizacion.txt'));
-  testFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  testFile.setTrashed(true);
-  Logger.log('Drive autorizado correctamente.');
-}
-
-function getProductImagesFolder() {
-  const folders = DriveApp.getFoldersByName(PRODUCT_IMAGES_FOLDER_NAME);
-  if (folders.hasNext()) return folders.next();
-  return DriveApp.createFolder(PRODUCT_IMAGES_FOLDER_NAME);
-}
-
+// subirFotosDesdeExcel() en el HTML), las redimensiona a miniatura y las
+// manda acá en tandas chicas como data URI (imagen embebida en el propio
+// texto, "data:image/jpeg;base64,..."). Se guardan tal cual en la columna
+// Imagen de Productos — no toca precios ni categorías.
+//
+// Ojo: probamos primero subir las fotos a Google Drive y linkear esa URL,
+// pero Drive manda "Cross-Origin-Resource-Policy: same-site" en la
+// respuesta, que el navegador respeta y bloquea mostrar la imagen en
+// cualquier sitio que no sea de Google — no hay CSP ni configuración
+// nuestra que lo pueda evitar. Por eso se embebe directo: las miniaturas
+// son chicas (par de KB cada una) así que el catálogo no se hace pesado.
 function handleUploadProductImages(data) {
   const check = requireAdmin(data);
   if (check.error) return check.error;
   const items = data.items || [];
   if (!items.length) return { ok: false, error: 'No se recibió ninguna imagen.' };
 
-  const folder = getProductImagesFolder();
-  const urlByCodigo = {};
-  let errores = 0;
+  const dataUrlByCodigo = {};
   items.forEach(function (item) {
-    try {
-      const bytes = Utilities.base64Decode(item.base64);
-      const blob = Utilities.newBlob(bytes, 'image/jpeg', item.codigo + '.jpg');
-      const existentes = folder.getFilesByName(item.codigo + '.jpg');
-      while (existentes.hasNext()) { existentes.next().setTrashed(true); } // reemplaza la foto vieja de este código
-      const file = folder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      urlByCodigo[item.codigo] = 'https://drive.google.com/uc?export=view&id=' + file.getId();
-    } catch (e) {
-      errores++;
-    }
+    if (item.codigo && item.dataUrl) dataUrlByCodigo[item.codigo] = item.dataUrl;
   });
 
   const sh = getProductsSheet();
@@ -444,12 +417,12 @@ function handleUploadProductImages(data) {
   let actualizados = 0;
   for (let i = 1; i < values.length; i++) {
     const codigo = String(values[i][0] || '');
-    if (urlByCodigo[codigo]) {
-      sh.getRange(i + 1, 6).setValue(urlByCodigo[codigo]);
+    if (dataUrlByCodigo[codigo]) {
+      sh.getRange(i + 1, 6).setValue(dataUrlByCodigo[codigo]);
       actualizados++;
     }
   }
-  return { ok: true, subidas: Object.keys(urlByCodigo).length, actualizados: actualizados, errores: errores };
+  return { ok: true, subidas: Object.keys(dataUrlByCodigo).length, actualizados: actualizados };
 }
 
 // ═══════════════════════════════════════════
