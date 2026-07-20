@@ -2603,7 +2603,8 @@ async function openHistory(){
 
 async function openHistoryForClient(clientKey) {
   _currentHistClientKey = clientKey;
-  const clientName = getClientList().find(c=>c.key===clientKey)?.razonSocial || clientKey;
+  const clients = await fetchClientList(); // por si todavía no cargó (ej. justo después de loguear)
+  const clientName = clients.find(c=>c.key===clientKey)?.razonSocial || clientKey;
   document.getElementById('histTitle').textContent = '🕓 Pedidos — ' + clientName;
   document.getElementById('histModal').classList.add('open');
   document.getElementById('histList').innerHTML = '<div class="hist-empty">Cargando…</div>';
