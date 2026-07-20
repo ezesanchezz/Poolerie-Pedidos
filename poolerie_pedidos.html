@@ -1517,15 +1517,6 @@ function updateDolarDisplay(fecha) {
 }
 
 // ═══════════════════════════════════════════
-//  DESCUENTOS POR CLIENTE (localStorage)
-// ═══════════════════════════════════════════
-function getDisc(key, fallback) {
-  const s = localStorage.getItem('desc_'+key);
-  return s !== null ? parseFloat(s) : (fallback ?? 32.5);
-}
-function setDisc(key, v) { localStorage.setItem('desc_'+key, v); }
-
-// ═══════════════════════════════════════════
 //  LOGIN
 // ═══════════════════════════════════════════
 document.getElementById('lp').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
@@ -1564,7 +1555,7 @@ async function doLogin() {
   if (!res.ok) { errEl.textContent = res.error || 'Razón social o contraseña incorrectos.'; errEl.style.display='block'; return; }
   sessionToken = res.token;
   const user = res.user;
-  currentUser = { ...user, descuento: getDisc(user.key, user.descuento) };
+  currentUser = user; // el descuento viene tal cual del servidor, sin overrides locales
   // Cambio de contraseña obligatorio para clientes que nunca cambiaron la inicial
   const isClient = !user.isVendor && !user.isAdmin;
   if (isClient && !user.passwordChanged) {
@@ -2248,7 +2239,7 @@ function filterClientMgr(q){
       );
   cl.innerHTML = '';
   filtered.forEach(client => {
-    const cur = getDisc(client.key);
+    const cur = client.descuento;
     const div = document.createElement('div');
     div.className = 'client-row';
     const badge = client.hasLogin
@@ -2267,13 +2258,23 @@ function filterClientMgr(q){
   if(count) count.textContent = filtered.length + ' cliente' + (filtered.length===1?'':'s');
 }
 function closeClientMgr(){document.getElementById('clientModal').classList.remove('open');}
-function saveClientDiscounts(){
-  document.querySelectorAll('.cr-input').forEach(inp=>{
-    const key=inp.dataset.key;
-    const v=parseFloat(inp.value);
-    if(!isNaN(v)&&v>=0&&v<=100) setDisc(key,v);
-  });
-  showToast('Descuentos guardados','ok');
+// Guarda en el servidor — el descuento pasa a ser el mismo para
+// cualquiera que mire a ese cliente, no un ajuste local del vendedor.
+async function saveClientDiscounts(){
+  const inputs = Array.from(document.querySelectorAll('.cr-input'));
+  const clients = getClientList();
+  let cambiados = 0;
+  for (const inp of inputs) {
+    const key = inp.dataset.key;
+    const v = parseFloat(inp.value);
+    if (isNaN(v) || v<0 || v>100) continue;
+    const client = clients.find(c=>c.key===key);
+    if (client && client.descuento === v) continue; // sin cambios, no hace falta llamar al servidor
+    const res = await apiCall({ action:'updateClientDiscount', token: sessionToken, key, descuento: v });
+    if (res.ok) cambiados++;
+  }
+  await fetchClientList(true);
+  showToast(cambiados ? `✅ ${cambiados} descuento(s) guardado(s)` : 'Sin cambios','ok');
   closeClientMgr();
   if(currentUser) recalcAll();
 }
@@ -2387,7 +2388,7 @@ function getClientList(){
 function mapClientEntry(c){
   return {
     key: c.key, razonSocial: c.razonSocial, cuit: c.cuit||'', codigo: c.codigo||'',
-    descuento: getDisc(c.key, c.descuento), hasLogin: true, passwordChanged: c.passwordChanged
+    descuento: c.descuento, hasLogin: true, passwordChanged: c.passwordChanged
   };
 }
 

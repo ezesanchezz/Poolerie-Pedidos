@@ -78,6 +78,7 @@ function doPost(e) {
       case 'saveOrder':      result = handleSaveOrder(data); break;
       case 'listOrders':     result = handleListOrders(data); break;
       case 'deleteOrder':    result = handleDeleteOrder(data); break;
+      case 'updateClientDiscount': result = handleUpdateClientDiscount(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
     }
@@ -222,6 +223,24 @@ function handleSaveUser(data) {
     passwordHash: passwordHash, salt: salt, descuento: data.descuento || 32.5,
     esVendedor: !!data.isVendor, esAdmin: false, email: data.email || '', passwordChanged: passwordChanged
   }, existing ? existing.rowNum : null);
+  return { ok: true };
+}
+
+// Permiso más angosto que handleSaveUser: un vendedor puede tocar el
+// descuento de un cliente (nunca su propia razón social/cuit/contraseña/
+// otros datos), para que el precio que ve ese cliente sea el mismo sin
+// importar quién lo mire o desde qué dispositivo. Antes esto se guardaba
+// en localStorage del vendedor y nadie más lo veía.
+function handleUpdateClientDiscount(data) {
+  const user = resolveSession(data.token);
+  if (!user) return { ok: false, error: 'Tu sesión venció, volvé a loguearte.' };
+  if (!user.esVendedor && !user.esAdmin) return { ok: false, error: 'No autorizado.' };
+  const existing = findUserRow(normalizeLogin(data.key));
+  if (!existing) return { ok: false, error: 'Cliente no encontrado.' };
+  if (existing.esVendedor || existing.esAdmin) return { ok: false, error: 'Esto es solo para clientes.' };
+  const d = parseFloat(data.descuento);
+  if (isNaN(d) || d < 0 || d > 100) return { ok: false, error: 'Descuento inválido.' };
+  updateUserFields(existing.clave, { descuento: d });
   return { ok: true };
 }
 
