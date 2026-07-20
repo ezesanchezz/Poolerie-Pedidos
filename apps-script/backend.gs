@@ -73,6 +73,9 @@ function doPost(e) {
       case 'refreshPrices':  result = handleRefreshPrices(data); break;
       case 'uploadProductImages': result = handleUploadProductImages(data); break;
       case 'registerClientRequest': result = handleRegisterClientRequest(data); break;
+      case 'saveOrder':      result = handleSaveOrder(data); break;
+      case 'listOrders':     result = handleListOrders(data); break;
+      case 'deleteOrder':    result = handleDeleteOrder(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
     }
@@ -590,6 +593,90 @@ function sendRegistrationEmail(to, r) {
     '</td></tr></table>' +
     '</body></html>';
   GmailApp.sendEmail(to, 'Nueva solicitud de alta de cliente — ' + r.razonSocial, '', { htmlBody: html });
+}
+
+// ═══════════════════════════════════════════
+//  HISTORIAL DE PEDIDOS (vive en el servidor, no en localStorage)
+// ═══════════════════════════════════════════
+// Antes el historial se guardaba en el navegador de cada uno — un cliente
+// que entraba desde otro dispositivo no veía sus propios pedidos, y un
+// pedido que un vendedor cargaba a nombre de un cliente solo quedaba en
+// el navegador del vendedor. Ahora todo vive acá, en la pestaña "Pedidos",
+// así se ve igual sin importar desde dónde se entre al portal.
+const PEDIDOS_SHEET_NAME = 'Pedidos';
+const PEDIDOS_HEADER = ['Id', 'Fecha', 'ClienteKey', 'ClienteNombre', 'CUIT', 'VendedorKey', 'VendedorNombre',
+  'FormaPago', 'DescuentoPct', 'Contado', 'Logistica', 'Observaciones', 'TotalARS', 'ItemsJSON'];
+
+function getPedidosSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(PEDIDOS_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(PEDIDOS_SHEET_NAME);
+    sh.appendRow(PEDIDOS_HEADER);
+  }
+  return sh;
+}
+
+function handleSaveOrder(data) {
+  const user = resolveSession(data.token);
+  if (!user) return { ok: false, error: 'Tu sesión venció, volvé a loguearte.' };
+  // Un cliente solo puede guardar pedidos a su propio nombre; un vendedor
+  // o admin sí puede guardarlo a nombre de otro cliente (pedido por teléfono).
+  const clienteKey = (user.esVendedor || user.esAdmin) ? normalizeLogin(data.clienteKey || user.clave) : user.clave;
+
+  const sh = getPedidosSheet();
+  const id = Utilities.getUuid();
+  const targetRow = sh.getLastRow() + 1;
+  // Texto plano en las columnas de texto libre antes de escribir (mismo
+  // bug del "#ERROR!" que en Usuarios/Productos si algo arranca con +/-/=/@).
+  [3, 4, 5, 8, 12].forEach(function (col) { sh.getRange(targetRow, col).setNumberFormat('@'); });
+  sh.getRange(targetRow, 1, 1, PEDIDOS_HEADER.length).setValues([[
+    id, new Date(), clienteKey, data.clienteNombre || '', data.cuit || '',
+    data.vendedorKey || '', data.vendedorNombre || '', data.formaPago || '',
+    data.descuentoPct || 0, !!data.contado, data.logistica || '', data.observaciones || '',
+    data.totalARS || 0, JSON.stringify(data.rows || [])
+  ]]);
+  return { ok: true, id: id };
+}
+
+function handleListOrders(data) {
+  const user = resolveSession(data.token);
+  if (!user) return { ok: false, error: 'Tu sesión venció, volvé a loguearte.' };
+  // Un cliente solo ve lo suyo — se ignora cualquier clienteKey que mande,
+  // nunca se confía en lo que pide el cliente para esto.
+  const clienteKey = (user.esVendedor || user.esAdmin) ? normalizeLogin(data.clienteKey || user.clave) : user.clave;
+
+  const values = getPedidosSheet().getDataRange().getValues();
+  const pedidos = [];
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    if (normalizeLogin(String(r[2] || '')) !== clienteKey) continue;
+    let items = [];
+    try { items = JSON.parse(r[13] || '[]'); } catch (e) {}
+    pedidos.push({
+      id: r[0], fecha: r[1], clienteKey: r[2], clienteNombre: r[3], cuit: r[4],
+      vendedorKey: r[5], vendedorNombre: r[6], formaPago: r[7], descuentoPct: r[8],
+      contado: r[9] === true || r[9] === 'TRUE', logistica: r[10], observaciones: r[11],
+      totalARS: r[12], rows: items
+    });
+  }
+  pedidos.sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); });
+  return { ok: true, pedidos: pedidos };
+}
+
+function handleDeleteOrder(data) {
+  const user = resolveSession(data.token);
+  if (!user) return { ok: false, error: 'Tu sesión venció, volvé a loguearte.' };
+  if (!user.esVendedor && !user.esAdmin) return { ok: false, error: 'No autorizado.' };
+  const sh = getPedidosSheet();
+  const values = sh.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] === data.id) {
+      sh.deleteRow(i + 1);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'Pedido no encontrado.' };
 }
 
 // ═══════════════════════════════════════════

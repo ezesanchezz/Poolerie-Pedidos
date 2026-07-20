@@ -2241,7 +2241,7 @@ ${tbl}
     const json=await res.json();
     if(!json.ok) throw new Error(json.error||'Error en servidor');
     showToast('✅ Pedido enviado correctamente!','ok');
-    saveToHistory(rows,p,{modality:modalityLabel,vendedor:vendedorUser?.razonSocial||''},cliente);
+    await saveOrderToServer(rows,p,{modality:modalityLabel,vendedorKey:vendedorKey,vendedor:vendedorUser?.razonSocial||'',observaciones:notes},cliente);
     XLSX.writeFile(wbk,fname);
     clearQtys();closeReview();document.getElementById('orderNotes').value='';
   }catch(e){
@@ -2540,55 +2540,49 @@ function loadClientProfile(){ /* compatibilidad — no-op */ }
 // elegido en el buscador si sos vendedor/admin, o vos mismo si sos cliente
 // (ver getEffectiveClient). Sin este parámetro quedaba siempre a nombre de
 // quien está logueado, aunque el pedido fuera para otro cliente.
-function saveToHistory(rows, params, extra, cliente){
-  cliente = cliente || currentUser;
-  const histKey = 'pedido_hist_' + cliente.key;
-  const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
+// El historial vive en el servidor (pestaña "Pedidos"), no en localStorage
+// — así se ve igual sin importar desde qué dispositivo se entre al portal.
+async function saveOrderToServer(rows, params, extra, cliente){
   const sumBase = rows.reduce((s,r)=>s+r['Subtotal ARS'],0);
   const discAmt = params.contado ? Math.round(sumBase*0.10*100)/100 : 0;
   const afterContado = sumBase - discAmt;
   const ivaAmt = Math.round(afterContado*0.21*100)/100;
   const tA = afterContado + ivaAmt;
-  hist.unshift({
-    id:        Date.now(),
-    fecha:     new Date().toLocaleString('es-AR'),
-    cliente:   cliente.razonSocial,
-    cuit:      cliente.cuit||'-',
-    formaPago: params.formaPago,
-    descuento: parseFloat(params.descTotal.toFixed(2))+'%',
-    totalARS:  tA,
-    items:     rows.length,
-    logistica: extra?.modality||'',
-    vendedor:  extra?.vendedor||'',
-    rows:      rows,
-    params:    {desc:params.desc, contado:params.contado, dolar:currentDolar, formaPago:params.formaPago}
+  await apiCall({
+    action: 'saveOrder', token: sessionToken,
+    clienteKey: cliente.key, clienteNombre: cliente.razonSocial, cuit: cliente.cuit || '',
+    vendedorKey: extra?.vendedorKey || '', vendedorNombre: extra?.vendedor || '',
+    formaPago: params.formaPago, descuentoPct: parseFloat(params.descTotal.toFixed(2)),
+    contado: !!params.contado, logistica: extra?.modality || '', observaciones: extra?.observaciones || '',
+    totalARS: tA, rows: rows
   });
-  localStorage.setItem(histKey, JSON.stringify(hist.slice(0,50)));
 }
 
-let _currentHistKey = '';
+// Cache en memoria de la última lista de pedidos pedida al servidor — así
+// "Ver detalle"/"Copiar al carrito"/"Eliminar" no tienen que volver a pedirla.
+let _lastOrdersList = [];
+let _currentHistClientKey = null; // null = el propio historial (openHistory)
 
-function renderHistList(histKey, emptyMsg) {
-  _currentHistKey = histKey;
-  const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
+function renderHistList(pedidos, emptyMsg) {
+  _lastOrdersList = pedidos;
   const list = document.getElementById('histList');
   const canEdit = currentUser && (currentUser.isVendor || currentUser.isAdmin);
-  if(!hist.length){
+  if(!pedidos.length){
     list.innerHTML = '<div class="hist-empty">'+(emptyMsg||'Sin pedidos registrados.')+'</div>';
   } else {
-    list.innerHTML = hist.map((h,i)=>{
+    list.innerHTML = pedidos.map(h=>{
       const actions = `
         <div class="hi-actions">
-          <button class="hi-btn hi-btn-view" onclick="openOrderDetail('${histKey}',${i})">👁 Ver detalle</button>
-          ${canEdit?`<button class="hi-btn hi-btn-copy" onclick="copyOrderToCart('${histKey}',${i})">📋 Copiar al carrito</button>`:''}
-          ${canEdit?`<button class="hi-btn hi-btn-del" onclick="deleteOrder('${histKey}',${i})">🗑 Eliminar</button>`:''}
+          <button class="hi-btn hi-btn-view" onclick="openOrderDetail('${h.id}')">👁 Ver detalle</button>
+          ${canEdit?`<button class="hi-btn hi-btn-copy" onclick="copyOrderToCart('${h.id}')">📋 Copiar al carrito</button>`:''}
+          ${canEdit?`<button class="hi-btn hi-btn-del" onclick="deleteOrder('${h.id}')">🗑 Eliminar</button>`:''}
         </div>`;
       return `<div class="hist-item">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px">
           <div>
-            <div class="hist-date">${h.fecha}</div>
-            <div class="hist-client">${esc(h.cliente)}</div>
-            <div class="hist-meta">${h.items} artículo${h.items!==1?'s':''} &middot; ${esc(h.formaPago)} &middot; Dto. ${h.descuento}${h.logistica?' &middot; '+esc(h.logistica):''}${h.vendedor?' &middot; '+esc(h.vendedor):''}</div>
+            <div class="hist-date">${new Date(h.fecha).toLocaleString('es-AR')}</div>
+            <div class="hist-client">${esc(h.clienteNombre)}</div>
+            <div class="hist-meta">${h.rows.length} artículo${h.rows.length!==1?'s':''} &middot; ${esc(h.formaPago)} &middot; Dto. ${h.descuentoPct}%${h.logistica?' &middot; '+esc(h.logistica):''}${h.vendedorNombre?' &middot; '+esc(h.vendedorNombre):''}</div>
           </div>
           <div class="hist-total">${fmtARS(h.totalARS)}</div>
         </div>
@@ -2598,35 +2592,43 @@ function renderHistList(histKey, emptyMsg) {
   }
 }
 
-function openHistory(){
-  const histKey = 'pedido_hist_' + (currentUser ? currentUser.key : 'unknown');
+async function openHistory(){
+  _currentHistClientKey = null;
   document.getElementById('histTitle').textContent = '🕓 Últimos pedidos';
-  renderHistList(histKey, 'Todavía no hay pedidos registrados.');
   document.getElementById('histModal').classList.add('open');
+  document.getElementById('histList').innerHTML = '<div class="hist-empty">Cargando…</div>';
+  const res = await apiCall({ action:'listOrders', token: sessionToken });
+  renderHistList(res.ok ? res.pedidos : [], 'Todavía no hay pedidos registrados.');
 }
 
-function openHistoryForClient(clientKey) {
-  const histKey = 'pedido_hist_' + clientKey;
+async function openHistoryForClient(clientKey) {
+  _currentHistClientKey = clientKey;
   const clientName = getClientList().find(c=>c.key===clientKey)?.razonSocial || clientKey;
   document.getElementById('histTitle').textContent = '🕓 Pedidos — ' + clientName;
-  renderHistList(histKey, 'Este cliente no tiene pedidos registrados.');
   document.getElementById('histModal').classList.add('open');
+  document.getElementById('histList').innerHTML = '<div class="hist-empty">Cargando…</div>';
+  const res = await apiCall({ action:'listOrders', token: sessionToken, clienteKey: clientKey });
+  renderHistList(res.ok ? res.pedidos : [], 'Este cliente no tiene pedidos registrados.');
+}
+
+async function refreshHistView(){
+  const res = await apiCall(_currentHistClientKey
+    ? { action:'listOrders', token: sessionToken, clienteKey: _currentHistClientKey }
+    : { action:'listOrders', token: sessionToken });
+  renderHistList(res.ok ? res.pedidos : [], 'Sin pedidos registrados.');
 }
 
 function closeHistory(){ document.getElementById('histModal').classList.remove('open'); }
 
-function deleteOrder(histKey, idx){
+async function deleteOrder(id){
   if(!confirm('¿Eliminar este pedido del historial?')) return;
-  const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
-  hist.splice(idx, 1);
-  localStorage.setItem(histKey, JSON.stringify(hist));
-  renderHistList(histKey);
+  await apiCall({ action:'deleteOrder', token: sessionToken, id });
+  await refreshHistView();
   showToast('Pedido eliminado','ok');
 }
 
-function copyOrderToCart(histKey, idx){
-  const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
-  const order = hist[idx];
+function copyOrderToCart(id){
+  const order = _lastOrdersList.find(h => h.id === id);
   if(!order || !order.rows || !order.rows.length){ showToast('Sin datos de productos en este pedido','err'); return; }
   quantities = {};
   order.rows.forEach(r => { if(r.Código && r.Cantidad) quantities[r.Código] = r.Cantidad; });
@@ -2637,17 +2639,15 @@ function copyOrderToCart(histKey, idx){
   showToast('✅ Pedido cargado en el carrito — '+order.rows.length+' productos','ok');
 }
 
-let _detailHistKey='', _detailIdx=0;
-function openOrderDetail(histKey, idx){
-  const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
-  const order = hist[idx];
+let _detailOrderId = '';
+function openOrderDetail(id){
+  const order = _lastOrdersList.find(h => h.id === id);
   if(!order) return;
-  _detailHistKey = histKey; _detailIdx = idx;
-  const canEdit = currentUser && (currentUser.isVendor || currentUser.isAdmin);
-  document.getElementById('odTitle').textContent = '📦 Pedido — ' + esc(order.cliente);
+  _detailOrderId = id;
+  document.getElementById('odTitle').textContent = '📦 Pedido — ' + esc(order.clienteNombre);
   document.getElementById('odMeta').innerHTML =
-    `<b>${order.fecha}</b> &middot; CUIT: ${esc(order.cuit||'—')} &middot; ${esc(order.formaPago)} &middot; Dto. ${order.descuento}`+
-    (order.logistica?` &middot; ${esc(order.logistica)}`:'')+(order.vendedor?` &middot; ${esc(order.vendedor)}`:'');
+    `<b>${new Date(order.fecha).toLocaleString('es-AR')}</b> &middot; CUIT: ${esc(order.cuit||'—')} &middot; ${esc(order.formaPago)} &middot; Dto. ${order.descuentoPct}%`+
+    (order.logistica?` &middot; ${esc(order.logistica)}`:'')+(order.vendedorNombre?` &middot; ${esc(order.vendedorNombre)}`:'');
   document.getElementById('odCopyBtn').style.display = '';
   const body = document.getElementById('odBody');
   if(order.rows && order.rows.length){
@@ -2662,17 +2662,17 @@ function openOrderDetail(histKey, idx){
     document.getElementById('odTotals').innerHTML =
       `<strong>Total: ${fmtARS(order.totalARS)}</strong>`;
   } else {
-    body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">Los pedidos anteriores no guardaban el detalle de productos. Los nuevos sí lo hacen.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">Sin detalle de productos guardado para este pedido.</td></tr>';
   }
   document.getElementById('orderDetailModal').classList.add('open');
 }
 function closeOrderDetail(){ document.getElementById('orderDetailModal').classList.remove('open'); }
-function copyOrderToCartFromDetail(){ copyOrderToCart(_detailHistKey, _detailIdx); }
+function copyOrderToCartFromDetail(){ copyOrderToCart(_detailOrderId); }
 
 // ═══════════════════════════════════════════
 //  MI CUENTA (clientes)
 // ═══════════════════════════════════════════
-function openMiCuenta() {
+async function openMiCuenta() {
   const u = currentUser;
   // Datos de cuenta
   document.getElementById('cuentaInfo').innerHTML = `
@@ -2686,30 +2686,32 @@ function openMiCuenta() {
   document.getElementById('cc_actual').value   = '';
   document.getElementById('cc_nueva').value    = '';
   document.getElementById('cc_confirma').value = '';
-  // Historial de pedidos del cliente
-  const hist = JSON.parse(localStorage.getItem('pedido_hist_' + u.key) || '[]');
+  document.getElementById('cuentaModal').classList.add('open');
+  // Historial de pedidos del cliente (viene del servidor)
   const histEl = document.getElementById('cuentaHistorial');
   if (histEl) {
-    const hKey = 'pedido_hist_' + u.key;
+    histEl.innerHTML = '<p style="color:var(--muted);font-size:.85rem">Cargando…</p>';
+    const res = await apiCall({ action:'listOrders', token: sessionToken });
+    const hist = res.ok ? res.pedidos : [];
+    _lastOrdersList = hist; // para que "Ver detalle" pueda encontrarlo por id
     histEl.innerHTML = hist.length
-      ? hist.map((h,i)=>`
+      ? hist.map(h=>`
         <div class="hist-item" style="margin-bottom:8px;padding:10px 12px;background:#F8FBFF;border:1px solid var(--border);border-radius:7px">
           <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
-            <span style="font-size:.78rem;color:var(--muted)">${h.fecha}</span>
+            <span style="font-size:.78rem;color:var(--muted)">${new Date(h.fecha).toLocaleString('es-AR')}</span>
             <strong style="color:var(--blue-dark)">${fmtARS(h.totalARS)}</strong>
           </div>
           <div style="font-size:.82rem;margin-top:4px;color:var(--text)">
-            ${h.items} artículo${h.items!==1?'s':''} · ${esc(h.formaPago)} · Dto. ${h.descuento}
+            ${h.rows.length} artículo${h.rows.length!==1?'s':''} · ${esc(h.formaPago)} · Dto. ${h.descuentoPct}%
             ${h.logistica?'<br><span style="color:var(--muted)">'+esc(h.logistica)+'</span>':''}
-            ${h.vendedor?'<span style="color:var(--muted);margin-left:6px">· '+esc(h.vendedor)+'</span>':''}
+            ${h.vendedorNombre?'<span style="color:var(--muted);margin-left:6px">· '+esc(h.vendedorNombre)+'</span>':''}
           </div>
           <div class="hi-actions" style="margin-top:6px">
-            <button class="hi-btn hi-btn-view" onclick="closeMiCuenta();openOrderDetail('${hKey}',${i})">👁 Ver detalle</button>
+            <button class="hi-btn hi-btn-view" onclick="closeMiCuenta();openOrderDetail('${h.id}')">👁 Ver detalle</button>
           </div>
         </div>`).join('')
       : '<p style="color:var(--muted);font-size:.85rem">Todavía no tenés pedidos registrados.</p>';
   }
-  document.getElementById('cuentaModal').classList.add('open');
 }
 function closeMiCuenta() { document.getElementById('cuentaModal').classList.remove('open'); }
 
