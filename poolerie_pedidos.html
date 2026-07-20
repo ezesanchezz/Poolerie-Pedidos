@@ -1971,10 +1971,14 @@ async function openReview(){
   try {
     const rows=getOrderRows();
     if(!rows.length){showToast('Sin artículos seleccionados.','err');return;}
+    if (currentUser && (currentUser.isVendor || currentUser.isAdmin) && !getEffectiveClient()) {
+      showToast('Elegí un cliente en el buscador antes de revisar el pedido.','err'); return;
+    }
+    const cliente = getEffectiveClient() || currentUser;
     const p=getParams(),notes=document.getElementById('orderNotes').value.trim();
     document.getElementById('revInfo').innerHTML=
-      `<div><span>Cliente:</span><strong>${esc(currentUser.razonSocial)}</strong></div>`+
-      (currentUser.cuit?`<div><span>CUIT:</span><strong>${esc(currentUser.cuit)}</strong></div>`:'')+
+      `<div><span>Cliente:</span><strong>${esc(cliente.razonSocial)}</strong></div>`+
+      (cliente.cuit?`<div><span>CUIT:</span><strong>${esc(cliente.cuit)}</strong></div>`:'')+
       `<div><span>Forma de pago:</span><strong>${esc(p.formaPago)}</strong></div>`+
       `<div><span>Descuento total:</span><strong>${parseFloat(p.descTotal.toFixed(2))}%</strong></div>`+
       `<div><span>Dólar BNA:</span><strong>$ ${fmt(p.dolar)}</strong></div>`+
@@ -2024,6 +2028,10 @@ function closeReview(){document.getElementById('revModal').classList.remove('ope
 // ═══════════════════════════════════════════
 function exportExcel(){
   const rows=getOrderRows();if(!rows.length){showToast('Sin productos seleccionados.','err');return;}
+  if (currentUser && (currentUser.isVendor || currentUser.isAdmin) && !getEffectiveClient()) {
+    showToast('Elegí un cliente en el buscador antes de generar el Excel.','err'); return;
+  }
+  const cliente=getEffectiveClient()||currentUser;
   const p=getParams(),fecha=new Date().toLocaleDateString('es-AR');
   const notes=document.getElementById('orderNotes').value.trim();
   const wbk=XLSX.utils.book_new();
@@ -2031,9 +2039,9 @@ function exportExcel(){
   // Hoja 1: datos del cliente
   const info=[
     ['PEDIDO POOLERIE — GRUPO INDUSPLAST'],[''],
-    ['Razón Social:',currentUser.razonSocial],
-    ['CUIT:',currentUser.cuit||'-'],
-    ['Email:',currentUser.email||'-'],
+    ['Razón Social:',cliente.razonSocial],
+    ['CUIT:',cliente.cuit||'-'],
+    ['Email:',cliente.email||'-'],
     ['Fecha:',fecha],
     ['Hora:',new Date().toLocaleTimeString('es-AR')],
     ['Forma de pago:',p.formaPago],
@@ -2124,6 +2132,10 @@ const EMAIL_LOGO_BASE64='iVBORw0KGgoAAAANSUhEUgAABYAAAAFnCAYAAAAfX+0HAAAgAElEQVR
 
 async function sendOrder(){
   const rows=getOrderRows();if(!rows.length)return;
+  if (currentUser && (currentUser.isVendor || currentUser.isAdmin) && !getEffectiveClient()) {
+    showToast('Elegí un cliente en el buscador antes de enviar el pedido.','err'); return;
+  }
+  const cliente = getEffectiveClient() || currentUser;
   const vendedorKey = document.getElementById('revVendedor')?.value||'';
   if (!vendedorKey) { showToast('Elegí el vendedor asignado antes de enviar el pedido.','err'); return; }
   const cfg=getMailCfg();
@@ -2159,13 +2171,13 @@ async function sendOrder(){
   tbl+=`</table>`;
   // Generar Excel como base64 para adjuntar
   const fecha=new Date().toLocaleDateString('es-AR');
-  const fname=`Pedido_${currentUser.razonSocial.replace(/[^a-zA-Z0-9]/g,'_')}_${fecha.replace(/\//g,'-')}.xlsx`;
+  const fname=`Pedido_${cliente.razonSocial.replace(/[^a-zA-Z0-9]/g,'_')}_${fecha.replace(/\//g,'-')}.xlsx`;
   const wbk=XLSX.utils.book_new();
   const infoSheet=[
     ['PEDIDO POOLERIE — GRUPO INDUSPLAST'],[''],
-    ['Razón Social:',currentUser.razonSocial],
-    ['CUIT:',currentUser.cuit||'-'],
-    ['Email:',currentUser.email||'-'],
+    ['Razón Social:',cliente.razonSocial],
+    ['CUIT:',cliente.cuit||'-'],
+    ['Email:',cliente.email||'-'],
     ['Fecha:',fecha],['Hora:',new Date().toLocaleTimeString('es-AR')],
     ['Forma de pago:',p.formaPago],
     ['Descuento:',String(p.desc).replace(',','.')],
@@ -2192,9 +2204,9 @@ async function sendOrder(){
 <tr><td style="padding:28px 24px">
 <h2 style="color:#0D6EBD;border-bottom:2px solid #0D6EBD;padding-bottom:8px;margin:0 0 16px">Nuevo pedido recibido</h2>
 <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px">
-<tr><td style="padding:5px 0;color:#64748B;width:160px">Cliente</td><td style="padding:5px 0;font-weight:700">${esc(currentUser.razonSocial)}</td></tr>
-<tr><td style="padding:5px 0;color:#64748B">CUIT</td><td style="padding:5px 0">${esc(currentUser.cuit||'-')}</td></tr>
-<tr><td style="padding:5px 0;color:#64748B">Email cliente</td><td style="padding:5px 0">${esc(currentUser.email||'-')}</td></tr>
+<tr><td style="padding:5px 0;color:#64748B;width:160px">Cliente</td><td style="padding:5px 0;font-weight:700">${esc(cliente.razonSocial)}</td></tr>
+<tr><td style="padding:5px 0;color:#64748B">CUIT</td><td style="padding:5px 0">${esc(cliente.cuit||'-')}</td></tr>
+<tr><td style="padding:5px 0;color:#64748B">Email cliente</td><td style="padding:5px 0">${esc(cliente.email||'-')}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Fecha</td><td style="padding:5px 0">${new Date().toLocaleString('es-AR')}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Forma de pago</td><td style="padding:5px 0">${esc(p.formaPago)}</td></tr>
 <tr><td style="padding:5px 0;color:#64748B">Descuento</td><td style="padding:5px 0">${String(p.desc).replace(',','.')}</td></tr>
@@ -2219,17 +2231,17 @@ ${tbl}
         action:'sendOrder',
         token:sessionToken,
         to:toEmail,
-        subject:'Nuevo pedido — '+currentUser.razonSocial,
+        subject:'Nuevo pedido — '+cliente.razonSocial,
         html:emailHtml,
         attachment:xlsxBase64,
         filename:fname,
-        replyTo:currentUser.email||''
+        replyTo:cliente.email||''
       })
     });
     const json=await res.json();
     if(!json.ok) throw new Error(json.error||'Error en servidor');
     showToast('✅ Pedido enviado correctamente!','ok');
-    saveToHistory(rows,p,{modality:modalityLabel,vendedor:vendedorUser?.razonSocial||''});
+    saveToHistory(rows,p,{modality:modalityLabel,vendedor:vendedorUser?.razonSocial||''},cliente);
     XLSX.writeFile(wbk,fname);
     clearQtys();closeReview();document.getElementById('orderNotes').value='';
   }catch(e){
@@ -2499,6 +2511,19 @@ function clearClientSelection(){
   _activeClientKey = '';
 }
 
+// A nombre de quién va el pedido: si sos vendedor/admin cargando un pedido
+// por teléfono, es el cliente elegido en el buscador — nunca vos mismo.
+// Si sos un cliente pidiendo para sí mismo, sos vos. Devuelve null si
+// sos vendedor/admin y todavía no elegiste ningún cliente.
+function getEffectiveClient(){
+  if (currentUser && !currentUser.isVendor && !currentUser.isAdmin) return currentUser;
+  if (_activeClientKey) {
+    const c = getClientList().find(x => x.key === _activeClientKey);
+    if (c) return { key: c.key, razonSocial: c.razonSocial, cuit: c.cuit || '', email: '' };
+  }
+  return null;
+}
+
 
 
 function closeClientDropdown(){
@@ -2511,8 +2536,13 @@ function loadClientProfile(){ /* compatibilidad — no-op */ }
 // ═══════════════════════════════════════════
 //  HISTORIAL DE PEDIDOS
 // ═══════════════════════════════════════════
-function saveToHistory(rows, params, extra){
-  const histKey = 'pedido_hist_' + currentUser.key;
+// "cliente" es a nombre de quién queda el pedido en el historial — el
+// elegido en el buscador si sos vendedor/admin, o vos mismo si sos cliente
+// (ver getEffectiveClient). Sin este parámetro quedaba siempre a nombre de
+// quien está logueado, aunque el pedido fuera para otro cliente.
+function saveToHistory(rows, params, extra, cliente){
+  cliente = cliente || currentUser;
+  const histKey = 'pedido_hist_' + cliente.key;
   const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
   const sumBase = rows.reduce((s,r)=>s+r['Subtotal ARS'],0);
   const discAmt = params.contado ? Math.round(sumBase*0.10*100)/100 : 0;
@@ -2522,8 +2552,8 @@ function saveToHistory(rows, params, extra){
   hist.unshift({
     id:        Date.now(),
     fecha:     new Date().toLocaleString('es-AR'),
-    cliente:   currentUser.razonSocial,
-    cuit:      currentUser.cuit||'-',
+    cliente:   cliente.razonSocial,
+    cuit:      cliente.cuit||'-',
     formaPago: params.formaPago,
     descuento: parseFloat(params.descTotal.toFixed(2))+'%',
     totalARS:  tA,
