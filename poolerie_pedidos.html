@@ -1308,16 +1308,6 @@ async function fetchProducts(force){
       res.products.forEach(p => PRODUCTS.push(p));
       _productsUpdatedAt = res.updatedAt;
     }
-    // Edición manual "por las dudas" (panel Admin > Productos): si hay un
-    // ajuste guardado local en este navegador, se aplica encima del
-    // catálogo recién bajado del backend.
-    try {
-      const cp = JSON.parse(localStorage.getItem('admin_products') || 'null');
-      if (cp && Array.isArray(cp) && cp.length) {
-        PRODUCTS.length = 0;
-        cp.forEach(p => PRODUCTS.push(p));
-      }
-    } catch(e){ console.error('fetchProducts (override local):', e); }
     return PRODUCTS;
   })();
   try {
@@ -3079,9 +3069,6 @@ async function adminRefreshPricesFromSheet() {
     if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar precios desde Google Sheets'; }
     return;
   }
-  // El sync de Sheets manda: se descarta cualquier ajuste manual viejo
-  // guardado en este navegador, para no mezclar datos desactualizados.
-  localStorage.removeItem('admin_products');
   await fetchProducts(true);
   buildCatTabs();
   renderTable();
@@ -3277,7 +3264,7 @@ function adminInlineEditProduct(i, cod) {
   `;
 }
 
-function adminSaveInlineProduct(i, oldCod) {
+async function adminSaveInlineProduct(i, oldCod) {
   if(!currentUser?.isAdmin) return;
   const newCod = document.getElementById('ie_cod').value.trim();
   const desc   = document.getElementById('ie_desc').value.trim();
@@ -3286,10 +3273,11 @@ function adminSaveInlineProduct(i, oldCod) {
   if (!newCod) { showToast('El código no puede estar vacío','err'); return; }
   if (!desc)   { showToast('La descripción no puede estar vacía','err'); return; }
   if (!prec)   { showToast('El precio debe ser mayor a 0','err'); return; }
-  const idx = PRODUCTS.findIndex(p=>p.codigo===oldCod);
-  if (idx < 0) { showToast('Producto no encontrado','err'); return; }
-  PRODUCTS[idx] = { ...PRODUCTS[idx], codigo:newCod, descripcion:desc, categoria:cat, precio:prec };
-  saveCustomProducts();
+  const existing = PRODUCTS.find(p=>p.codigo===oldCod);
+  const res = await apiCall({ action:'saveProduct', token:sessionToken, codigo:newCod, descripcion:desc, categoria:cat, precio:prec, moneda:existing?.moneda, imagen:existing?.imagen });
+  if (!res.ok) { showToast(res.error || 'No se pudo guardar el producto','err'); return; }
+  if (newCod !== oldCod) await apiCall({ action:'deleteProduct', token:sessionToken, codigo:oldCod });
+  await refreshProductsView();
   showToast('✅ Producto actualizado','ok');
   openAdminPanel('products');
 }
@@ -3325,7 +3313,7 @@ function adminShowProductForm() {
   f.scrollIntoView({behavior:'smooth'});
 }
 
-function adminSaveProduct() {
+async function adminSaveProduct() {
   if(!currentUser?.isAdmin) return;
   const cod  = document.getElementById('apf_cod').value.trim();
   const desc = document.getElementById('apf_desc').value.trim();
@@ -3335,28 +3323,30 @@ function adminSaveProduct() {
   if (!cod)  { showToast('Ingresá el código','err'); return; }
   if (!desc) { showToast('Ingresá la descripción','err'); return; }
   if (!prec) { showToast('Ingresá el precio','err'); return; }
-  const idx = PRODUCTS.findIndex(p=>p.codigo===cod);
-  if (idx>=0) PRODUCTS[idx] = {codigo:cod,descripcion:desc,categoria:cat,precio:prec,moneda:mon};
-  else PRODUCTS.push({codigo:cod,descripcion:desc,categoria:cat,precio:prec,moneda:mon});
-  saveCustomProducts();
+  const res = await apiCall({ action:'saveProduct', token:sessionToken, codigo:cod, descripcion:desc, categoria:cat, precio:prec, moneda:mon });
+  if (!res.ok) { showToast(res.error || 'No se pudo guardar el producto','err'); return; }
+  await refreshProductsView();
   showToast('✅ Producto guardado','ok');
   openAdminPanel('products');
 }
 
-function adminDeleteProduct(cod) {
+async function adminDeleteProduct(cod) {
   if(!currentUser?.isAdmin) return;
   if (!confirm(`¿Quitar "${cod}" del catálogo? Esta acción no se puede deshacer.`)) return;
-  const i = PRODUCTS.findIndex(p=>p.codigo===cod);
-  if (i>=0) PRODUCTS.splice(i,1);
-  saveCustomProducts();
+  const res = await apiCall({ action:'deleteProduct', token:sessionToken, codigo:cod });
+  if (!res.ok) { showToast(res.error || 'No se pudo eliminar el producto','err'); return; }
+  await refreshProductsView();
   showToast('Producto eliminado del catálogo','');
   openAdminPanel('products');
 }
 
-function saveCustomProducts() {
-  if(!currentUser?.isAdmin) return;
-  localStorage.setItem('admin_products', JSON.stringify(PRODUCTS));
-  if (currentUser) { buildCatTabs(); renderTable(); }
+// Vuelve a pedir el catálogo al servidor (fuente de verdad única) y
+// refresca lo que se está mostrando — reemplaza al viejo saveCustomProducts(),
+// que solo guardaba en localStorage y no llegaba a nadie más.
+async function refreshProductsView() {
+  await fetchProducts(true);
+  buildCatTabs();
+  renderTable();
 }
 
 </script>

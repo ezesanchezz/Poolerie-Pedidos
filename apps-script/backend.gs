@@ -72,6 +72,8 @@ function doPost(e) {
       case 'getProducts':    result = handleGetProducts(data); break;
       case 'refreshPrices':  result = handleRefreshPrices(data); break;
       case 'uploadProductImages': result = handleUploadProductImages(data); break;
+      case 'saveProduct':    result = handleSaveProduct(data); break;
+      case 'deleteProduct':  result = handleDeleteProduct(data); break;
       case 'registerClientRequest': result = handleRegisterClientRequest(data); break;
       case 'saveOrder':      result = handleSaveOrder(data); break;
       case 'listOrders':     result = handleListOrders(data); break;
@@ -387,6 +389,63 @@ function writeAllProducts(products) {
     sh.getRange(2, 1, rows.length, 3).setNumberFormat('@');
     sh.getRange(2, 1, rows.length, header.length).setValues(rows);
   }
+}
+
+// ═══════════════════════════════════════════
+//  EDICIÓN MANUAL DE PRODUCTOS (admin) — vive en el servidor
+// ═══════════════════════════════════════════
+// Antes esto se guardaba en localStorage como un "override" que solo veía
+// el navegador del admin — ni siquiera los clientes reales veían el
+// cambio en el catálogo. Ahora escribe directo en la pestaña Productos.
+function findProductRow(codigo) {
+  const values = getProductsSheet().getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0] || '') === codigo) return i + 1;
+  }
+  return null;
+}
+
+function upsertProductRow(product, rowNum) {
+  const sh = getProductsSheet();
+  const targetRow = rowNum || (sh.getLastRow() + 1);
+  [1, 2, 3].forEach(function (col) { sh.getRange(targetRow, col).setNumberFormat('@'); });
+  sh.getRange(targetRow, 1, 1, 6).setValues([[
+    product.codigo, product.descripcion, product.categoria, product.precio, product.moneda || 'US$', product.imagen || ''
+  ]]);
+}
+
+function handleSaveProduct(data) {
+  const check = requireAdmin(data);
+  if (check.error) return check.error;
+  const codigo = String(data.codigo || '').trim();
+  if (!codigo) return { ok: false, error: 'Falta el código.' };
+  const descripcion = String(data.descripcion || '').trim();
+  if (!descripcion) return { ok: false, error: 'Falta la descripción.' };
+  const precio = parseFloat(data.precio);
+  if (isNaN(precio) || precio <= 0) return { ok: false, error: 'El precio debe ser mayor a 0.' };
+
+  const rowNum = findProductRow(codigo);
+  // Si no viene una imagen nueva, conserva la que ya tenía ese código.
+  let imagen = data.imagen || '';
+  if (!imagen && rowNum) {
+    const existing = readAllProducts().find(function (p) { return p.codigo === codigo; });
+    imagen = existing ? existing.imagen : '';
+  }
+  upsertProductRow({
+    codigo: codigo, descripcion: descripcion, categoria: data.categoria || '',
+    precio: precio, moneda: data.moneda || 'US$', imagen: imagen
+  }, rowNum);
+  return { ok: true };
+}
+
+function handleDeleteProduct(data) {
+  const check = requireAdmin(data);
+  if (check.error) return check.error;
+  const codigo = String(data.codigo || '').trim();
+  const rowNum = findProductRow(codigo);
+  if (!rowNum) return { ok: false, error: 'Producto no encontrado.' };
+  getProductsSheet().deleteRow(rowNum);
+  return { ok: true };
 }
 
 // ═══════════════════════════════════════════
