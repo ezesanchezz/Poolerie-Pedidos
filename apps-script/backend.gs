@@ -79,6 +79,7 @@ function doPost(e) {
       case 'listOrders':     result = handleListOrders(data); break;
       case 'deleteOrder':    result = handleDeleteOrder(data); break;
       case 'updateClientDiscount': result = handleUpdateClientDiscount(data); break;
+      case 'saveDraft':      result = handleSaveDraft(data); break;
       case 'sendOrder':      result = handleSendOrder(data); break;
       default:                result = { ok: false, error: 'Acción desconocida: ' + action };
     }
@@ -714,6 +715,12 @@ function handleSaveOrder(data) {
     data.descuentoPct || 0, !!data.contado, data.logistica || '', data.observaciones || '',
     data.totalARS || 0, JSON.stringify(data.rows || [])
   ]]);
+  // Un cliente que arma su propio pedido: recordar qué vendedor eligió,
+  // para pre-seleccionárselo la próxima vez (antes vivía en localStorage,
+  // ahora es parte de su cuenta real — se ve igual en cualquier dispositivo).
+  if (!user.esVendedor && !user.esAdmin && data.vendedorKey) {
+    updateUserFields(user.clave, { vendedorPreferido: data.vendedorKey });
+  }
   return { ok: true, id: id };
 }
 
@@ -757,6 +764,18 @@ function handleDeleteOrder(data) {
   return { ok: false, error: 'Pedido no encontrado.' };
 }
 
+// Borrador del carrito (cantidades cargadas, todavía sin enviar) — antes
+// vivía en localStorage, propio de cada navegador; ahora es parte de la
+// cuenta, así se puede empezar un pedido en el celular y terminarlo en la
+// computadora. Se llama con un debounce corto desde el navegador (ver
+// saveDraft() en el HTML), no en cada tecla.
+function handleSaveDraft(data) {
+  const user = resolveSession(data.token);
+  if (!user) return { ok: false, error: 'Tu sesión venció, volvé a loguearte.' };
+  updateUserFields(user.clave, { borrador: JSON.stringify(data.quantities || {}) });
+  return { ok: true };
+}
+
 // ═══════════════════════════════════════════
 //  HELPERS — permisos / sesión
 // ═══════════════════════════════════════════
@@ -784,7 +803,8 @@ function publicUser(u) {
   return {
     key: u.clave, razonSocial: u.razonSocial, cuit: u.cuit, codigo: u.codigo,
     descuento: u.descuento, isVendor: u.esVendedor, isAdmin: u.esAdmin,
-    email: u.email, passwordChanged: u.passwordChanged
+    email: u.email, passwordChanged: u.passwordChanged,
+    borrador: u.borrador || '', vendedorPreferido: u.vendedorPreferido || ''
   };
 }
 
@@ -822,7 +842,8 @@ function hashPassword(password, salt) {
 //  HELPERS — planilla "Usuarios"
 // ═══════════════════════════════════════════
 // Columnas: Clave | RazonSocial | CUIT | Codigo | PasswordHash | Salt |
-//           Descuento | EsVendedor | EsAdmin | Email | PasswordChanged
+//           Descuento | EsVendedor | EsAdmin | Email | PasswordChanged |
+//           Borrador | VendedorPreferido
 //
 // _sheetCache/_usersCache memoizan la hoja y las filas parseadas durante
 // UNA sola ejecución de doPost (varios handlers llaman a readAllUsers()
@@ -839,7 +860,9 @@ function getUsersSheet() {
   if (!sh) {
     sh = ss.insertSheet(USERS_SHEET_NAME);
     sh.appendRow(['Clave', 'RazonSocial', 'CUIT', 'Codigo', 'PasswordHash', 'Salt',
-      'Descuento', 'EsVendedor', 'EsAdmin', 'Email', 'PasswordChanged']);
+      'Descuento', 'EsVendedor', 'EsAdmin', 'Email', 'PasswordChanged', 'Borrador', 'VendedorPreferido']);
+  } else if (!sh.getRange(1, 12).getValue()) {
+    sh.getRange(1, 12, 1, 2).setValues([['Borrador', 'VendedorPreferido']]); // sheet viejo, sin estas columnas todavía
   }
   _sheetCache = sh;
   return _sheetCache;
@@ -864,7 +887,9 @@ function readAllUsers() {
       esVendedor: r[7] === true || r[7] === 'TRUE',
       esAdmin: r[8] === true || r[8] === 'TRUE',
       email: r[9] || '',
-      passwordChanged: r[10] === true || r[10] === 'TRUE'
+      passwordChanged: r[10] === true || r[10] === 'TRUE',
+      borrador: r[11] || '',
+      vendedorPreferido: r[12] || ''
     });
   }
   _usersCache = rows;
@@ -887,7 +912,8 @@ function findUserByLoginOrName(usuario) {
 function upsertUserRow(row, rowNum) {
   const sh = getUsersSheet();
   const values = [row.clave, row.razonSocial, row.cuit, row.codigo, row.passwordHash, row.salt,
-    row.descuento, row.esVendedor, row.esAdmin, row.email, row.passwordChanged];
+    row.descuento, row.esVendedor, row.esAdmin, row.email, row.passwordChanged,
+    row.borrador || '', row.vendedorPreferido || ''];
   const targetRow = rowNum || (sh.getLastRow() + 1);
   // Forzar texto plano en las columnas de texto libre ANTES de escribir,
   // para que Sheets no intente interpretar como fórmula un valor que

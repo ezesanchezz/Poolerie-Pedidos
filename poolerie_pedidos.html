@@ -1584,9 +1584,10 @@ async function enterApp() {
   document.getElementById('btnAdmin').style.display     = user.isAdmin  ? 'inline-block' : 'none';
   document.getElementById('btnMiCuenta').style.display  = 'inline-block';
   if (user.isVendor) document.getElementById('descuento').value = currentUser.descuento;
-  // restaurar borrador
-  const d = localStorage.getItem('draft_'+user.key);
-  if (d) { quantities = JSON.parse(d); showToast('📝 Borrador anterior restaurado',''); }
+  // restaurar borrador (viene con el login, ya no depende del navegador)
+  if (user.borrador) {
+    try { quantities = JSON.parse(user.borrador); showToast('📝 Borrador anterior restaurado',''); } catch(e) { quantities = {}; }
+  }
   fetchDolar();
   await fetchProducts();
   buildCatTabs();
@@ -1611,12 +1612,29 @@ async function submitForcedPasswordChange() {
 }
 
 function doLogout() {
-  saveDraft(); currentUser=null; quantities={}; sessionToken=null;
+  // Se manda el último estado del carrito ya (no hace falta esperar el
+  // debounce), pero sin bloquear el cierre de sesión — se dispara y se
+  // sigue, con los valores ya capturados para no depender de currentUser
+  // después de limpiarlo.
+  clearTimeout(_draftSaveTimer);
+  if (sessionToken) apiCall({ action:'saveDraft', token: sessionToken, quantities: {...quantities} });
+  currentUser=null; quantities={}; sessionToken=null;
   document.getElementById('loginPage').style.display='flex';
   document.getElementById('appPage').style.display='none';
   document.getElementById('lu').value=''; document.getElementById('lp').value='';
 }
-function saveDraft() { if(currentUser) localStorage.setItem('draft_'+currentUser.key, JSON.stringify(quantities)); }
+
+// El borrador ya no vive en localStorage — se manda al servidor con un
+// pequeño debounce (no hace falta guardar en cada tecla mientras se
+// cargan cantidades, alcanza con guardar 1.2s después del último cambio).
+let _draftSaveTimer = null;
+function saveDraft() {
+  if (!currentUser) return;
+  clearTimeout(_draftSaveTimer);
+  _draftSaveTimer = setTimeout(() => {
+    apiCall({ action:'saveDraft', token: sessionToken, quantities });
+  }, 1200);
+}
 
 // ═══════════════════════════════════════════
 //  REGISTRO DE CLIENTE NUEVO (público, sin login)
@@ -1972,10 +1990,9 @@ async function openReview(){
         + vendors.map(v => `<option value="${esc(v.key)}">${esc(v.razonSocial)}</option>`).join('');
       // Restaurar preferencia guardada — solo para clientes (cada vendedor
       // carga pedidos de clientes distintos, no tiene sentido recordarle
-      // el último elegido)
-      if (!currentUser.isVendor) {
-        const saved = localStorage.getItem('pref_vendedor_' + currentUser.key);
-        if (saved) vSel.value = saved;
+      // el último elegido). Viene con el login, ya no depende del navegador.
+      if (!currentUser.isVendor && currentUser.vendedorPreferido) {
+        vSel.value = currentUser.vendedorPreferido;
       }
     }
     document.getElementById('revModal').classList.add('open');
@@ -2111,7 +2128,6 @@ async function sendOrder(){
   const p=getParams(),notes=document.getElementById('orderNotes').value.trim();
 
   // Logística (clientes y vendedores que cargan pedidos por teléfono)
-  const isClient = currentUser && !currentUser.isVendor && !currentUser.isAdmin;
   const modality  = document.querySelector('input[name="revModality"]:checked')?.value||'envio';
   const modalityLabel = modality==='retiro' ? '🏭 Retiro en fábrica' : modality==='envio' ? '🚛 Envío a domicilio' : '';
   // GmailApp.sendEmail corrompe emojis fuera del plano básico (📦, 🏭, 🚛, etc.) —
@@ -2120,7 +2136,8 @@ async function sendOrder(){
   const modalityLabelEmail = modality==='retiro' ? 'Retiro en fábrica' : modality==='envio' ? 'Envío a domicilio' : '';
   const vendors = await fetchVendors();
   const vendedorUser = vendors.find(v=>v.key===vendedorKey) || null;
-  if (isClient) localStorage.setItem('pref_vendedor_'+currentUser.key, vendedorKey);
+  // La preferencia de vendedor ya se guarda del lado del servidor, dentro
+  // de saveOrderToServer() más abajo — no hace falta nada acá.
 
   // Email destino: email del vendedor elegido, o el email de configuración por defecto
   const toEmail = (vendedorUser && vendedorUser.email) ? vendedorUser.email : cfg.em;
