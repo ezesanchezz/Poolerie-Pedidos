@@ -620,9 +620,9 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
 #toast{
   position:fixed;bottom:68px;left:50%;transform:translateX(-50%);
   background:#1E293B;color:#fff;padding:10px 22px;border-radius:9px;
-  font-size:.84rem;font-family:inherit;
+  font-size:.84rem;font-family:inherit;max-width:min(92vw,480px);
   box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:9999;
-  opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;font-weight:600;
+  opacity:0;transition:opacity .25s;pointer-events:none;white-space:normal;text-align:center;font-weight:600;
 }
 #toast.show{opacity:1}
 #toast.ok{background:linear-gradient(135deg,#16A34A,#15803D)}
@@ -852,7 +852,10 @@ input.qty{width:70px;font-weight:600}
     </div>
       <button class="btn-login" onclick="doLogin()">Ingresar →</button>
       <p class="lerr" id="lerr">Razón social o contraseña incorrectos.</p>
-      <button type="button" class="reg-link" onclick="openRegistro()"><strong>Registrate</strong></button>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px">
+        <button type="button" class="reg-link" style="width:auto;margin-top:0" onclick="openResetPw()">¿Olvidaste tu contraseña?</button>
+        <button type="button" class="reg-link" style="width:auto;margin-top:0" onclick="openRegistro()"><strong>Registrate</strong></button>
+      </div>
     </div>
     <div style="color:rgba(255,255,255,.3);font-size:.68rem;text-align:center;letter-spacing:1.5px;text-transform:uppercase">Portal B2B · Grupo Indusplast</div>
   </div>
@@ -1171,6 +1174,27 @@ input.qty{width:70px;font-weight:600}
     <div class="mbtns" style="margin-top:16px">
       <button class="bcancel" onclick="closeRegistro()">Cancelar</button>
       <button class="bsave" id="regSubmitBtn" onclick="submitRegistro()">Enviar solicitud</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD MODAL -->
+<div class="modal-overlay" id="resetPwModal">
+  <div class="mcard mcard-sm" style="max-width:440px">
+    <h2>🔑 ¿Olvidaste tu contraseña?</h2>
+    <p style="margin:0 0 14px;font-size:.85rem;color:#64748B">
+      Ingresá tu usuario y tu CUIT. Un administrador va a revisar el pedido antes de resetear la contraseña — no es instantáneo.
+    </p>
+    <div class="fg"><label>Razón Social / Usuario</label><input type="text" id="rpw_usuario" placeholder="Ej: Distribuidora Norte S.A." autocomplete="organization"/></div>
+    <div class="fg"><label>CUIT</label><input type="text" id="rpw_cuit" placeholder="30-12345678-9" autocomplete="off" inputmode="numeric"/></div>
+    <div style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+      <label>Dejar vacío</label>
+      <input type="text" id="rpw_hp" tabindex="-1" autocomplete="off"/>
+    </div>
+    <p class="lerr" id="rpwErr"></p>
+    <div class="mbtns" style="margin-top:16px">
+      <button class="bcancel" onclick="closeResetPw()">Cancelar</button>
+      <button class="bsave" id="rpwSubmitBtn" onclick="submitResetPw()">Enviar pedido</button>
     </div>
   </div>
 </div>
@@ -1682,6 +1706,46 @@ async function submitRegistro() {
   if (!res.ok) { err.textContent = res.error || 'No se pudo enviar la solicitud.'; err.style.display='block'; return; }
   closeRegistro();
   showToast('✅ ¡Listo! Recibimos tu solicitud, te vamos a contactar a la brevedad.', 'ok');
+}
+
+// ═══════════════════════════════════════════
+//  RESETEO DE CONTRASEÑA (público, sin login)
+// ═══════════════════════════════════════════
+// Nunca resetea nada en el momento: un administrador lo aprueba por mail,
+// igual que el alta de cliente. El mensaje de éxito es siempre el mismo
+// se haya encontrado o no la cuenta, para no delatar qué usuarios existen.
+function openResetPw() {
+  ['rpw_usuario','rpw_cuit','rpw_hp'].forEach(id => document.getElementById(id).value = '');
+  const err = document.getElementById('rpwErr');
+  err.style.display = 'none'; err.textContent = '';
+  document.getElementById('resetPwModal').classList.add('open');
+}
+function closeResetPw() { document.getElementById('resetPwModal').classList.remove('open'); }
+
+async function submitResetPw() {
+  const err = document.getElementById('rpwErr');
+  err.style.display = 'none';
+  const usuario = document.getElementById('rpw_usuario').value.trim();
+  const cuit = document.getElementById('rpw_cuit').value.replace(/\D/g,'');
+  const honeypot = document.getElementById('rpw_hp').value;
+
+  if (!usuario) { err.textContent = 'Ingresá tu usuario.'; err.style.display='block'; return; }
+  if (cuit.length !== 11) { err.textContent = 'El CUIT debe tener 11 dígitos.'; err.style.display='block'; return; }
+
+  const btn = document.getElementById('rpwSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  let res;
+  try {
+    res = await apiCall({ action:'requestPasswordReset', usuario, cuit, honeypot });
+  } catch (e) {
+    err.textContent = 'No se pudo conectar con el servidor. Probá de nuevo.'; err.style.display='block';
+    btn.disabled = false; btn.textContent = 'Enviar pedido';
+    return;
+  }
+  btn.disabled = false; btn.textContent = 'Enviar pedido';
+  if (!res.ok) { err.textContent = res.error || 'No se pudo enviar el pedido.'; err.style.display='block'; return; }
+  closeResetPw();
+  showToast('✅ Si los datos coinciden, en breve nos van a contactar para resetear tu contraseña. Avisale también a tu vendedor para que esté atento.', 'ok', 7000);
 }
 
 // ═══════════════════════════════════════════
@@ -2299,12 +2363,12 @@ async function saveClientDiscounts(){
 // ═══════════════════════════════════════════
 //  TOAST
 // ═══════════════════════════════════════════
-function showToast(msg,type=''){
+function showToast(msg,type='',duration=3000){
   const t=document.getElementById('toast');
   t.textContent=msg;
   t.className='show'+(type?' '+type:'');
   clearTimeout(t._tid);
-  t._tid=setTimeout(()=>{t.className='';},3000);
+  t._tid=setTimeout(()=>{t.className='';},duration);
 }
 // ═══════════════════════════════════════════
 //  TOGGLE PASSWORD

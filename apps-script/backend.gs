@@ -75,6 +75,7 @@ function doPost(e) {
       case 'saveProduct':    result = handleSaveProduct(data); break;
       case 'deleteProduct':  result = handleDeleteProduct(data); break;
       case 'registerClientRequest': result = handleRegisterClientRequest(data); break;
+      case 'requestPasswordReset': result = handleRequestPasswordReset(data); break;
       case 'saveOrder':      result = handleSaveOrder(data); break;
       case 'listOrders':     result = handleListOrders(data); break;
       case 'deleteOrder':    result = handleDeleteOrder(data); break;
@@ -98,6 +99,8 @@ function doGet(e) {
   const action = e.parameter.action;
   if (action === 'approveClientRequest') return handleApproveClientRequest(e.parameter.token);
   if (action === 'rejectClientRequest')  return handleRejectClientRequest(e.parameter.token);
+  if (action === 'approvePasswordReset') return handleApprovePasswordReset(e.parameter.token);
+  if (action === 'rejectPasswordReset')  return handleRejectPasswordReset(e.parameter.token);
   return ContentService.createTextOutput('Backend Poolerie OK');
 }
 
@@ -672,6 +675,151 @@ function sendRegistrationEmail(to, r) {
     '</td></tr></table>' +
     '</body></html>';
   GmailApp.sendEmail(to, 'Nueva solicitud de alta de cliente — ' + r.razonSocial, '', { htmlBody: html });
+}
+
+// ═══════════════════════════════════════════
+//  SOLICITUDES DE RESETEO DE CONTRASEÑA (público, sin login)
+// ═══════════════════════════════════════════
+// Igual filosofía que el alta de cliente: nunca se resetea la contraseña
+// en el momento. Se manda un mail al admin con "Aprobar" y recién ahí se
+// pone la contraseña = CUIT (mismo criterio que un alta nueva). El CUIT
+// pedido acá NO es la barrera de seguridad real —es solo para filtrar
+// pedidos al voleo—; la barrera real es que un humano lo apruebe.
+const RESETEOS_SHEET_NAME = 'SolicitudesReseteo';
+
+function handleRequestPasswordReset(data) {
+  // Mismo honeypot anti-bot que el alta de cliente.
+  if (data.honeypot) return { ok: true };
+
+  const usuarioIngresado = String(data.usuario || '').trim();
+  const cuitIngresado = String(data.cuit || '').replace(/\D/g, '');
+  if (!usuarioIngresado) return { ok: false, error: 'Ingresá tu usuario.' };
+  if (cuitIngresado.length !== 11) return { ok: false, error: 'El CUIT debe tener 11 dígitos.' };
+
+  // A partir de acá nunca se le informa al que pide el reseteo si el
+  // usuario existe o si el CUIT coincide — siempre se responde éxito, para
+  // no darle a nadie pistas de qué cuentas son reales o cuál es su CUIT.
+  const user = findUserByLoginOrName(usuarioIngresado);
+  if (user) {
+    const cuitReal = String(user.cuit || '').replace(/\D/g, '');
+    if (cuitReal && cuitReal === cuitIngresado) {
+      const fecha = new Date();
+      const token = Utilities.getUuid();
+      appendReseteo(fecha, user.clave, user.razonSocial, cuitIngresado, token);
+      const adminEmails = readAllUsers()
+        .filter(function (u) { return u.esAdmin && u.email; })
+        .map(function (u) { return u.email; });
+      if (adminEmails.length) {
+        sendPasswordResetEmail(adminEmails.join(','), { razonSocial: user.razonSocial, cuit: cuitReal, fecha: fecha, token: token });
+      }
+    }
+  }
+  return { ok: true };
+}
+
+// El link "Aprobar" del mail llega acá vía GET. Pone la contraseña en el
+// CUIT del cliente (mismo valor que un alta nueva) y marca la solicitud
+// como procesada. El admin le avisa al cliente por fuera del sistema
+// (teléfono/WhatsApp), igual que ya hace hoy con el reseteo manual.
+function handleApprovePasswordReset(token) {
+  const sol = findReseteoByToken(token);
+  if (!sol) return htmlPage('Enlace inválido', 'Este enlace no existe o ya fue usado.', '#E53E3E');
+  if (sol.estado !== 'Pendiente') return htmlPage('Ya procesada', 'Esta solicitud ya fue ' + sol.estado.toLowerCase() + ' anteriormente.', '#E53E3E');
+
+  const existing = findUserRow(sol.usuario);
+  if (!existing) {
+    updateReseteoEstado(sol.rowNum, 'Error: usuario ya no existe');
+    return htmlPage('Usuario no encontrado', 'Ese usuario ya no existe en el portal.', '#E53E3E');
+  }
+
+  const newPass = (existing.cuit || '').replace(/\D/g, '') || existing.clave;
+  const salt = makeSalt();
+  const hash = hashPassword(newPass, salt);
+  updateUserFields(existing.clave, { passwordHash: hash, salt: salt, passwordChanged: false });
+  updateReseteoEstado(sol.rowNum, 'Aprobado');
+
+  return htmlPage(
+    '✅ Contraseña reseteada',
+    'La contraseña de <strong>' + escHtml(existing.razonSocial) + '</strong> ahora es su CUIT: <strong>' + escHtml(newPass) + '</strong>.<br><br>' +
+    'Avisale por fuera del sistema (teléfono/WhatsApp) — se le va a pedir que la cambie en su próximo ingreso.',
+    '#1a9e5c'
+  );
+}
+
+function handleRejectPasswordReset(token) {
+  const sol = findReseteoByToken(token);
+  if (!sol) return htmlPage('Enlace inválido', 'Este enlace no existe o ya fue usado.', '#E53E3E');
+  if (sol.estado !== 'Pendiente') return htmlPage('Ya procesada', 'Esta solicitud ya fue ' + sol.estado.toLowerCase() + ' anteriormente.', '#E53E3E');
+  updateReseteoEstado(sol.rowNum, 'Rechazado');
+  return htmlPage('Solicitud rechazada', 'No se reseteó ninguna contraseña para <strong>' + escHtml(sol.razonSocial) + '</strong>.', '#64748B');
+}
+
+function getReseteosSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(RESETEOS_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(RESETEOS_SHEET_NAME);
+    sh.appendRow(['Fecha', 'Usuario', 'RazonSocial', 'CuitIngresado', 'Estado', 'ApprovalToken']);
+  }
+  return sh;
+}
+
+function appendReseteo(fecha, usuario, razonSocial, cuitIngresado, token) {
+  const sh = getReseteosSheet();
+  const targetRow = sh.getLastRow() + 1;
+  [2, 3].forEach(function (col) { sh.getRange(targetRow, col).setNumberFormat('@'); });
+  sh.getRange(targetRow, 1, 1, 6).setValues([[fecha, usuario, razonSocial, cuitIngresado, 'Pendiente', token]]);
+}
+
+function findReseteoByToken(token) {
+  if (!token) return null;
+  const values = getReseteosSheet().getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    if (r[5] === token) {
+      return { rowNum: i + 1, fecha: r[0], usuario: String(r[1] || ''), razonSocial: r[2], cuitIngresado: String(r[3] || ''), estado: r[4] };
+    }
+  }
+  return null;
+}
+
+function updateReseteoEstado(rowNum, estado) {
+  getReseteosSheet().getRange(rowNum, 5).setValue(estado);
+}
+
+function sendPasswordResetEmail(to, r) {
+  const fechaStr = Utilities.formatDate(r.fecha, 'GMT-3', 'dd/MM/yyyy HH:mm');
+  const baseUrl = ScriptApp.getService().getUrl();
+  const approveUrl = baseUrl + '?action=approvePasswordReset&token=' + encodeURIComponent(r.token);
+  const rejectUrl = baseUrl + '?action=rejectPasswordReset&token=' + encodeURIComponent(r.token);
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>' +
+    '<body style="margin:0;padding:0;background:#F0F5FB;font-family:Arial,sans-serif;font-size:14px;color:#1E293B">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F0F5FB;padding:24px 0">' +
+    '<tr><td align="center">' +
+    '<table role="presentation" width="650" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;max-width:650px;width:100%">' +
+    '<tr><td style="background:#0D6EBD;padding:18px 24px;text-align:center">' +
+    '<img src="data:image/png;base64,' + EMAIL_LOGO_BASE64 + '" alt="Poolerie" style="height:42px;display:block;margin:0 auto"/>' +
+    '</td></tr>' +
+    '<tr><td style="padding:28px 24px">' +
+    '<h2 style="color:#0D6EBD;border-bottom:2px solid #0D6EBD;padding-bottom:8px;margin:0 0 16px">Pedido de reseteo de contraseña</h2>' +
+    '<p style="color:#64748B;font-size:.85rem;margin:0 0 18px">Recibido el ' + fechaStr + ' desde el Portal de Pedidos.</p>' +
+    '<table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px">' +
+    '<tr><td style="padding:5px 0;color:#64748B;width:160px">Razón Social</td><td style="padding:5px 0;font-weight:700">' + escHtml(r.razonSocial) + '</td></tr>' +
+    '<tr><td style="padding:5px 0;color:#64748B">CUIT ingresado</td><td style="padding:5px 0">' + escHtml(r.cuit) + '</td></tr>' +
+    '</table>' +
+    '<p style="color:#64748B;font-size:.8rem;margin:0 0 14px">El CUIT ingresado coincide con el que está cargado en el portal. Revisá que el pedido tenga sentido antes de aprobar.</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0"><tr>' +
+    '<td style="padding-right:10px"><a href="' + approveUrl + '" style="display:inline-block;background:#1a9e5c;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:8px">Aprobar reseteo</a></td>' +
+    '<td><a href="' + rejectUrl + '" style="display:inline-block;background:#F1F5F9;color:#475569;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:8px">Rechazar</a></td>' +
+    '</tr></table>' +
+    '<p style="color:#64748B;font-size:.8rem;margin-top:18px">' +
+    'Al aprobar, la contraseña de esta cuenta pasa a ser su CUIT — le vas a tener que avisar por fuera del sistema (teléfono/WhatsApp).' +
+    '</p>' +
+    '</td></tr></table>' +
+    '</td></tr></table>' +
+    '</body></html>';
+  GmailApp.sendEmail(to, 'Pedido de reseteo de contraseña — ' + r.razonSocial, '', { htmlBody: html });
 }
 
 // ═══════════════════════════════════════════
