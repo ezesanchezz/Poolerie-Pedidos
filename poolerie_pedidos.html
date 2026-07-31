@@ -19,6 +19,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Roboto:wght@400;500;700;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:107.5%} /* letra un poco más grande en todo el sitio, para que se lea mejor */
+/* Evita que tocar dos veces rápido un botón (ej. el "+" de cantidad) se
+   interprete como doble-tap para hacer zoom — el pinch-zoom con dos dedos
+   sigue funcionando igual, esto solo afecta el gesto de doble-tap. */
+button{touch-action:manipulation}
 :root{
   --blue:#0088B6;--blue-dark:#006A94;--blue-light:#2AAFD4;--primary:#0D6EBD;
   --teal:#5BBFAC;--teal-dark:#3EA090;
@@ -267,7 +271,7 @@ header{
 
 /* TABLE */
 .twrap{flex:1;padding:16px 20px;overflow-x:auto}
-table{
+#tbl{
   width:100%;border-collapse:collapse;background:#fff;
   border-radius:12px;overflow:hidden;
   box-shadow:0 2px 12px rgba(0,0,0,.06);min-width:640px;
@@ -584,7 +588,7 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
      Las demás tablas del sitio (admin, revisión de pedido, etc.) NO se
      tocan — todo esto está scopeado a #tbl. */
   .twrap{padding:8px 0;overflow-x:visible}
-  table{min-width:520px;border-radius:0;font-size:.8rem}
+  table{border-radius:0;font-size:.8rem} /* min-width sacado de acá: era un selector sin scopear que forzaba scroll horizontal en CUALQUIER tabla del sitio (ver revisión de pedido) */
   #tbl{min-width:0;width:100%}
   #tbl thead{display:none}
   #tbl tbody{display:block}
@@ -635,10 +639,22 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   .mbtns{flex-wrap:wrap}
   .bsave,.bcancel{flex:1;text-align:center}
 
-  /* REVIEW MODAL */
+  /* REVIEW MODAL — misma idea que el catálogo: apilado en tarjeta en vez
+     de tabla de 5 columnas, para que no haga falta scroll horizontal. */
   .rinfo{grid-template-columns:1fr;gap:4px}
   .rtbl{font-size:.75rem}
-  .rtbl th,.rtbl td{padding:6px 8px}
+  .rtbl thead{display:none}
+  .rtbl tbody{display:block}
+  .rtbl tr:not(.rtbl-total){display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .rtbl tr:not(.rtbl-total) td{display:block;padding:0;border:none}
+  .rtbl-cod{order:1;flex:0 0 auto;font-size:.68rem}
+  .rtbl-desc{order:2;flex:1 1 100%;font-weight:600}
+  .rtbl-price{order:3;flex:0 0 auto;text-align:left!important;color:var(--muted)}
+  .rtbl-price::before{content:'Precio: '}
+  .rtbl-qty{order:4;flex:0 0 auto;text-align:left!important;color:var(--muted)}
+  .rtbl-qty::before{content:'Cant.: '}
+  .rtbl-sub{order:5;flex:0 0 auto;margin-left:auto;font-weight:700;text-align:right!important}
+  .rtbl-total{display:flex;justify-content:space-between;padding:8px 0}
   .rmbtns{flex-wrap:wrap}
   .bback,.bconfirm{flex:1;text-align:center}
 
@@ -1568,6 +1584,32 @@ applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dar
   }
 })();
 
+// ═══════════════════════════════════════════
+//  BLOQUEAR SCROLL DE FONDO CON UN MODAL ABIERTO
+//  Antes, si scrolleabas sin querer adentro de un modal (ej. "Ver
+//  detalle" de un producto), el catálogo de atrás también scrolleaba —
+//  al cerrar el modal aparecías en otra parte de la lista. Se observa
+//  la clase "open" de cualquier modal y se bloquea/libera el scroll del
+//  body según haya alguno abierto, sin tener que tocar cada función de
+//  abrir/cerrar modal una por una.
+// ═══════════════════════════════════════════
+(function() {
+  // Se observa TODO el body (subtree:true) en vez de buscar los modales
+  // por selector: este script corre a mitad del HTML, antes de que el
+  // navegador haya leído modales que están más abajo en el archivo (ej.
+  // #breakdownModal, el de "Ver detalle" de composición de producto) — un
+  // querySelectorAll acá arriba no los encontraría.
+  function sync() {
+    const anyOpen = document.querySelector('.modal-overlay.open, #breakdownModal.open');
+    document.documentElement.style.overflow = anyOpen ? 'hidden' : '';
+    document.body.style.overflow = anyOpen ? 'hidden' : '';
+  }
+  new MutationObserver(sync).observe(document.body, {
+    attributes: true, attributeFilter: ['class'], subtree: true
+  });
+  sync();
+})();
+
 let currentUser = null;
 let quantities  = {};
 let soloSel     = false;
@@ -2294,7 +2336,7 @@ async function openReview(){
     rows.forEach(r=>{
       sumBase+=r['Subtotal ARS']; // ex-IVA, ex-contado (= lineBase = precio×factor×dólar×qty redondeado)
       const tr=document.createElement('tr');
-      tr.innerHTML=`<td class="cod">${esc(r.Código)}</td><td>${esc(r.Descripción)}</td><td style="text-align:right">${fmtARS(r['Precio ARS c/IVA'])}</td><td style="text-align:center">${r.Cantidad}</td><td style="text-align:right">${fmtARS(r['Subtotal ARS'])}</td>`;
+      tr.innerHTML=`<td class="cod rtbl-cod">${esc(r.Código)}</td><td class="rtbl-desc">${esc(r.Descripción)}</td><td class="rtbl-price" style="text-align:right">${fmtARS(r['Precio ARS c/IVA'])}</td><td class="rtbl-qty" style="text-align:center">${r.Cantidad}</td><td class="rtbl-sub" style="text-align:right">${fmtARS(r['Subtotal ARS'])}</td>`;
       rb.appendChild(tr);
     });
     // SAP: descuento redondeado, IVA redondeado
@@ -2302,7 +2344,7 @@ async function openReview(){
     const afterContado = sumBase - discAmt;
     const ivaAmt = Math.round(afterContado*0.21*100)/100;
     const tot = afterContado + ivaAmt;
-    const ft=document.createElement('tr');ft.style.cssText='font-weight:800;background:var(--surface-soft)';
+    const ft=document.createElement('tr');ft.className='rtbl-total';ft.style.cssText='font-weight:800;background:var(--surface-soft)';
     ft.innerHTML=`<td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:right">${fmtARS(tot)}</td>`;
     rb.appendChild(ft);
     // Logística: para todos (clientes y vendedores que cargan pedidos por teléfono)
