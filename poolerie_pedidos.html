@@ -675,6 +675,16 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
 #toast.ok{background:linear-gradient(135deg,#16A34A,#15803D)}
 #toast.err{background:linear-gradient(135deg,#DC2626,#B91C1C)}
 
+/* ══════ FILTROS FIJOS AL SCROLLEAR ══════
+   Categorías + buscador quedan pegados justo debajo del header (que ya es
+   sticky) para no tener que volver arriba cada vez que se quiere filtrar o
+   cargar un artículo. --header-h lo calcula JS (mide el header real), así
+   no se rompe si el header ocupa distinta altura en mobile o si se arma en
+   dos líneas. */
+.sticky-filters{
+  position:sticky;top:var(--header-h,0px);z-index:20;
+  background:var(--bg);
+}
 /* ══════ CATEGORY SLIDER ══════ */
 .cat-slider-wrap{
   background:#fff;border-bottom:2px solid var(--border);
@@ -784,12 +794,13 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   background-color:transparent;
 }
 
-/* Category rows más on-brand */
+/* Category rows más on-brand — más grandes que el texto de producto (.83rem)
+   a propósito, para que se distingan de un vistazo al scrollear. */
 .catrow td{
   background:linear-gradient(90deg,rgba(0,136,182,.10) 0%,rgba(91,191,172,.06) 100%);
-  color:#005F80;font-weight:800;font-size:.71rem;
-  text-transform:uppercase;letter-spacing:.7px;
-  padding:8px 13px;border-bottom:1px solid rgba(0,136,182,.15);
+  color:#005F80;font-weight:800;font-size:.98rem;
+  text-transform:uppercase;letter-spacing:.6px;
+  padding:10px 13px;border-bottom:1px solid rgba(0,136,182,.15);
   border-left:4px solid var(--blue);
 }
 
@@ -1160,6 +1171,9 @@ input.qty{width:70px;font-weight:600}
     <div class="desc-pill" id="descPill">Descuento aplicado: 32.5%</div>
   </div>
 
+  <!-- CATEGORY TABS + BUSCADOR — fijos al scrollear, para no tener que
+       volver arriba cada vez que se quiere filtrar o agregar un artículo. -->
+  <div class="sticky-filters">
   <!-- CATEGORY TABS -->
   <div class="cat-slider-wrap">
     <button class="cat-arrow left" onclick="scrollCats(-1)" title="Anterior">&#8249;</button>
@@ -1213,6 +1227,7 @@ input.qty{width:70px;font-weight:600}
     </select>
     <button class="bclr" onclick="clearQtys()">🗑 Limpiar</button>
     <button class="bsel" id="btnSoloSel" onclick="toggleSoloSel()" style="display:none">🛒 Ver seleccionados</button>
+  </div>
   </div>
 
   <!-- TABLE -->
@@ -1533,6 +1548,25 @@ function toggleTheme() {
 // El <script> del <head> ya puso el atributo antes de pintar (evita el
 // flash); acá solo se sincronizan los íconos de los botones con eso.
 applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+// ═══════════════════════════════════════════
+//  ALTURA REAL DEL HEADER (para que categorías + buscador
+//  queden pegados justo debajo, sin un número fijo que se
+//  rompa en mobile o si el header arma dos líneas)
+// ═══════════════════════════════════════════
+(function() {
+  const header = document.querySelector('header');
+  if (!header) return;
+  const update = function() {
+    document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+  };
+  update();
+  if (window.ResizeObserver) {
+    new ResizeObserver(update).observe(header);
+  } else {
+    window.addEventListener('resize', update);
+  }
+})();
 
 let currentUser = null;
 let quantities  = {};
