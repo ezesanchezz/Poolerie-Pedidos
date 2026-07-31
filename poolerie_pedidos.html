@@ -24,10 +24,22 @@ html{font-size:107.5%} /* letra un poco más grande en todo el sitio, para que s
   --teal:#5BBFAC;--teal-dark:#3EA090;
   --grad:linear-gradient(135deg,#0088B6 0%,#5BBFAC 100%);
   --grad-h:linear-gradient(135deg,#006A94 0%,#3EA090 100%);
-  --bg:#F0F5FB;--surface:#fff;--border:#E2EBF5;
+  --bg:#F0F5FB;--surface:#fff;--surface-soft:#F8FBFF;--border:#E2EBF5;
   --text:#1A2535;--muted:#64748B;--light:#94A3B8;
 }
+/* ══════ MODO OSCURO ══════
+   Solo se redefinen los colores "neutros" (fondos, texto, bordes) — el
+   celeste/turquesa de marca (--blue, --teal, --primary, --grad, etc.) queda
+   exactamente igual en los dos modos, a propósito. Todo lo que ya usa estas
+   variables (la gran mayoría del sitio) se adapta solo; el resto de los
+   colores puestos a mano (charts, badges, barra de vendedor/dólar) se
+   sobreescriben más abajo, agrupados por tipo. */
+:root[data-theme="dark"]{
+  --bg:#0B1420;--surface:#152232;--surface-soft:#101B29;--border:#2A3D52;
+  --text:#E6EDF5;--muted:#9FB0C3;--light:#6F84A0;
+}
 body{font-family:'Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
 
 /* ══════ LOGIN ══════ */
 #loginPage,#forcedPwPage{
@@ -851,14 +863,126 @@ input.qty{width:70px;font-weight:600}
 .client-selected-tag.show{display:flex}
 .cst-clear{cursor:pointer;opacity:.6;transition:opacity .15s;font-size:.9rem}
 .cst-clear:hover{opacity:1}
+.pw-warn-box{background:#FEF3C7;color:#92400E}
 
+/* ══════════════════════════════════════
+   MODO OSCURO — overrides puntuales
+   Todo lo que ya usa var(--bg/--surface/--surface-soft/--border/--text/
+   --muted/--light) se adapta solo con el bloque de :root de arriba. Acá
+   solo lo que estaba puesto a mano con un color fijo. El celeste/turquesa
+   de marca (--blue, --teal, --primary, --grad) NO se toca en ningún lado.
+══════════════════════════════════════ */
+/* Resguardo general: cualquier input/select/textarea que no tenga su
+   propio fondo/color puesto a mano cae en el blanco+negro del navegador
+   sin importar el tema — se lo evita acá para todo el sitio de una vez. */
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{
+  background-color:var(--surface);color:var(--text);color-scheme:dark;
+}
+[data-theme="dark"] .fg input,[data-theme="dark"] .fg select,
+[data-theme="dark"] .notessec textarea{background:var(--surface);color:var(--text)}
+[data-theme="dark"] .cod{color:var(--light)}
+[data-theme="dark"] .bsm-cuenta{background:var(--surface);color:var(--blue-light);border-color:var(--surface)}
+[data-theme="dark"] .bsm-cuenta:hover{background:var(--surface-soft);color:var(--blue-light)}
+[data-theme="dark"] #clientChip{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
+[data-theme="dark"] #dolarDate{color:var(--muted)}
+[data-theme="dark"] .client-fp select{background:var(--surface)}
+[data-theme="dark"] .contado-box label{color:#4ADE80}
+[data-theme="dark"] .chk-contado{border-color:var(--border)}
+[data-theme="dark"] .chk-contado:disabled{background:var(--surface-soft);border-color:var(--border)}
+[data-theme="dark"] .desc-pill{background:rgba(96,165,250,.16);color:#93C5FD;border-color:rgba(147,197,253,.35)}
+[data-theme="dark"] .desc-pill.green{background:rgba(34,197,94,.16);color:#4ADE80;border-color:rgba(74,222,128,.35)}
+[data-theme="dark"] .sbar,[data-theme="dark"] .sbar select{background:var(--surface)}
+[data-theme="dark"] .bclr{background:var(--surface-soft)}
+[data-theme="dark"] .bsel{background:rgba(96,165,250,.16);border-color:rgba(147,197,253,.4);color:#93C5FD}
+[data-theme="dark"] .bsel:hover{background:rgba(96,165,250,.28)}
+[data-theme="dark"] table{background:var(--surface)}
+[data-theme="dark"] .catrow td{color:#7DD3FC}
+[data-theme="dark"] tbody tr:not(.catrow){border-bottom-color:var(--border)}
+[data-theme="dark"] .dto-badge{background:rgba(34,197,94,.16);color:#4ADE80;border-color:rgba(74,222,128,.35)}
+[data-theme="dark"] .dto-badge.gold{background:rgba(245,158,11,.16);color:#FBBF24;border-color:rgba(253,224,71,.35)}
+[data-theme="dark"] input.qty.hv{border-color:#22C55E;background:rgba(34,197,94,.14);color:#4ADE80}
+[data-theme="dark"] .subars{color:#4ADE80}
+[data-theme="dark"] .price-ars{color:#5EC4E8}
+[data-theme="dark"] .footer,[data-theme="dark"] .mcard,[data-theme="dark"] .admin-panel,
+[data-theme="dark"] .client-dropdown,[data-theme="dark"] .cat-slider-wrap,[data-theme="dark"] .cat-arrow,
+[data-theme="dark"] #breakdownModal .bk-box{background:var(--surface)}
+[data-theme="dark"] .bdl:disabled,[data-theme="dark"] .bsend:disabled{background:var(--border)}
+[data-theme="dark"] .rinfo,[data-theme="dark"] .admin-tabs,[data-theme="dark"] .admin-form{background:var(--surface-soft)}
+[data-theme="dark"] .rtbl td,[data-theme="dark"] .client-row,[data-theme="dark"] .admin-table td,
+[data-theme="dark"] .hist-item,[data-theme="dark"] .od-row td,[data-theme="dark"] .client-dd-item{border-bottom-color:var(--border)}
+[data-theme="dark"] .bback,[data-theme="dark"] .bcancel,[data-theme="dark"] .admin-btn-cancel,
+[data-theme="dark"] .admin-form-grid input[readonly],[data-theme="dark"] .pass-cell,
+[data-theme="dark"] .admin-table tr:hover td,[data-theme="dark"] .hist-item:hover,
+[data-theme="dark"] .client-dd-item:hover{background:var(--surface-soft)}
+[data-theme="dark"] .pass-cell{color:var(--muted)}
+[data-theme="dark"] .admin-table .del.small{background:rgba(239,68,68,.16);border-color:rgba(248,113,113,.35);color:#F87171}
+[data-theme="dark"] .rol-badge.vend,[data-theme="dark"] .hi-btn-view,[data-theme="dark"] .cdd-badge{background:rgba(96,165,250,.16);color:#93C5FD}
+[data-theme="dark"] .hi-btn-view{border-color:rgba(147,197,253,.4)}
+[data-theme="dark"] .rol-badge.cli,[data-theme="dark"] .ps-new,[data-theme="dark"] .new-price,
+[data-theme="dark"] .hi-btn-copy{background:rgba(34,197,94,.16);color:#4ADE80}
+[data-theme="dark"] .new-price{background:none}
+[data-theme="dark"] .hi-btn-copy{border-color:rgba(74,222,128,.35)}
+[data-theme="dark"] .ps-changed{background:rgba(245,158,11,.16);color:#FBBF24}
+[data-theme="dark"] .ps-miss,[data-theme="dark"] .old-price,[data-theme="dark"] .hi-btn-del{background:rgba(239,68,68,.16);color:#F87171}
+[data-theme="dark"] .old-price{background:none}
+[data-theme="dark"] .hi-btn-del{border-color:rgba(248,113,113,.35)}
+[data-theme="dark"] .btn-detalle{background:rgba(96,165,250,.16);border-color:rgba(147,197,253,.4)}
+[data-theme="dark"] .btn-detalle:hover{background:rgba(96,165,250,.28)}
+[data-theme="dark"] #breakdownModal .bk-header{border-bottom-color:var(--border)}
+[data-theme="dark"] #breakdownModal .bk-table th{background:var(--surface-soft);color:var(--muted);border-bottom-color:var(--border)}
+[data-theme="dark"] #breakdownModal .bk-table td{border-bottom-color:var(--border)}
+[data-theme="dark"] #breakdownModal .bk-table .sub-row td{background:var(--surface-soft);color:var(--muted)}
+[data-theme="dark"] #breakdownModal .bk-table .asm-row td{background:rgba(96,165,250,.14);color:#93C5FD}
+[data-theme="dark"] #breakdownModal .bk-cod,[data-theme="dark"] #breakdownModal .bk-table .unit-col{color:var(--light)}
+[data-theme="dark"] #breakdownModal .bk-close{color:var(--light)}
+[data-theme="dark"] #breakdownModal .bk-close:hover{color:var(--text)}
+[data-theme="dark"] .pw-warn-box{background:rgba(245,158,11,.16);color:#FBBF24}
+[data-theme="dark"] .lcard{background:rgba(21,34,50,.94);border-color:rgba(255,255,255,.1)}
+[data-theme="dark"] #tbl .qty-btn{background:var(--surface)}
+[data-theme="dark"] #tbl .qty-btn:active{background:rgba(0,136,182,.18)}
+[data-theme="dark"] .od-row:nth-child(even){background:var(--surface-soft)}
+[data-theme="dark"] #appPage{
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(0,136,182,.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(91,191,172,.09) 0%, transparent 60%),
+    var(--bg);
+}
+
+/* Botón de modo oscuro */
+.theme-toggle{
+  padding:6px 10px;background:rgba(255,255,255,.14);color:#fff;
+  border:1px solid rgba(255,255,255,.25);border-radius:8px;
+  cursor:pointer;font-size:.95rem;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.theme-toggle:hover{background:rgba(255,255,255,.24)}
+.theme-toggle-login{
+  position:fixed;top:16px;right:16px;z-index:50;
+  padding:8px 10px;background:rgba(255,255,255,.14);color:#fff;
+  border:1px solid rgba(255,255,255,.3);border-radius:8px;
+  cursor:pointer;font-size:1.05rem;line-height:1;
+}
+.theme-toggle-login:hover{background:rgba(255,255,255,.24)}
 
 </style>
+<script>
+// Aplica el tema guardado ANTES de pintar la página (si no, se ve un
+// flash de modo claro por una fracción de segundo al recargar en oscuro).
+(function(){
+  try {
+    if (localStorage.getItem('poolerie_theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  } catch(e) {}
+})();
+</script>
 </head>
 <body>
 
 <!-- ══════ LOGIN ══════ -->
 <div id="loginPage">
+  <button class="theme-toggle-login" onclick="toggleTheme()" id="btnThemeLogin" title="Cambiar a modo oscuro">🌙</button>
   <!-- Efectos de fondo -->
   <div class="login-blob login-blob-1"></div>
   <div class="login-blob login-blob-2"></div>
@@ -936,6 +1060,7 @@ input.qty{width:70px;font-weight:600}
     <div class="hright">
       <span class="chip" id="clientChip">—</span>
       <button class="bsm amber" onclick="openClientMgr()" id="btnClientMgr" style="display:none">👥 Clientes</button>
+      <button class="theme-toggle" onclick="toggleTheme()" id="btnThemeApp" title="Cambiar a modo oscuro">🌙</button>
       <button class="bsm admin-hbtn" onclick="openAdminPanel('users')" id="btnAdmin" style="display:none">🛠 Admin</button>
       <button class="bsm bsm-cuenta" onclick="openMiCuenta()" id="btnMiCuenta" style="display:none">⚙️ Mi cuenta</button>
       <button class="bsm" onclick="downloadPriceList()" title="Descargar lista de precios en Excel">📄 Lista de precios</button>
@@ -947,7 +1072,7 @@ input.qty{width:70px;font-weight:600}
   <div id="dolarBar">
     <span>💵 Dólar BNA venta:</span>
     <span class="dolar-val" id="dolarDisplay">—</span>
-    <span id="dolarDate" style="color:#64748b;font-size:.76rem"></span>
+    <span id="dolarDate" style="color:var(--muted);font-size:.76rem"></span>
     <span class="dolar-fetch" onclick="fetchDolar()" title="Actualizar cotización">↻ Actualizar</span>
     <span id="dolarStatus" style="color:#F59E0B;font-size:.76rem"></span>
   </div>
@@ -1128,7 +1253,7 @@ input.qty{width:70px;font-weight:600}
       <tbody id="revBody"></tbody>
     </table>
     <!-- Logística: clientes y vendedores (pedidos por teléfono) -->
-    <div id="revLogistica" style="display:none;margin:14px 0 0;padding:14px;background:#F0F7FF;border:1px solid #C5DCF5;border-radius:9px">
+    <div id="revLogistica" style="display:none;margin:14px 0 0;padding:14px;background:var(--surface-soft);border:1px solid var(--border);border-radius:9px">
       <div style="font-weight:700;font-size:.88rem;color:var(--blue-dark);margin-bottom:10px">🚚 Logística del pedido</div>
       <div style="margin-bottom:12px">
         <span style="font-size:.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">¿Cómo recibís el pedido?</span>
@@ -1190,7 +1315,7 @@ input.qty{width:70px;font-weight:600}
 <div class="modal-overlay" id="regModal">
   <div class="mcard mcard-sm" style="max-width:480px">
     <h2>📝 Registrarse como cliente nuevo</h2>
-    <p style="margin:0 0 14px;font-size:.85rem;color:#64748B">
+    <p style="margin:0 0 14px;font-size:.85rem;color:var(--muted)">
       Completá tus datos y nos vamos a poner en contacto para darte de alta. Esto no habilita el acceso al instante — un administrador revisa la solicitud primero.
     </p>
     <div class="fg"><label>Razón Social</label><input type="text" id="reg_rs" placeholder="Ej: Distribuidora Norte S.A." autocomplete="organization"/></div>
@@ -1218,7 +1343,7 @@ input.qty{width:70px;font-weight:600}
   <div class="mcard mcard-sm" style="max-width:440px">
     <div id="rpwFormView">
       <h2>🔑 ¿Olvidaste tu contraseña?</h2>
-      <p style="margin:0 0 14px;font-size:.85rem;color:#64748B">
+      <p style="margin:0 0 14px;font-size:.85rem;color:var(--muted)">
         Ingresá tu usuario y tu CUIT. Un administrador va a revisar el pedido antes de resetear la contraseña — no es instantáneo.
       </p>
       <div class="fg"><label>Razón Social / Usuario</label><input type="text" id="rpw_usuario" placeholder="Ej: Distribuidora Norte S.A." autocomplete="organization"/></div>
@@ -1235,10 +1360,10 @@ input.qty{width:70px;font-weight:600}
     </div>
     <div id="rpwSuccessView" style="display:none">
       <h2>✅ Pedido enviado</h2>
-      <p style="margin:0 0 16px;font-size:.88rem;color:#475569;line-height:1.5">
+      <p style="margin:0 0 16px;font-size:.88rem;color:var(--muted);line-height:1.5">
         Si los datos coinciden, en breve nos van a contactar para resetear tu contraseña.
       </p>
-      <p style="margin:0 0 18px;padding:12px 14px;background:#FEF3C7;border-radius:8px;font-size:.85rem;color:#92400E;font-weight:700;line-height:1.45">
+      <p class="pw-warn-box" style="margin:0 0 18px;padding:12px 14px;border-radius:8px;font-size:.85rem;font-weight:700;line-height:1.45">
         ⚠️ Avisale también a tu vendedor que pediste el cambio de contraseña, para que esté atento.
       </p>
       <div class="mbtns">
@@ -1267,7 +1392,7 @@ input.qty{width:70px;font-weight:600}
     <div style="overflow-x:auto">
       <table id="odTable" style="width:100%;border-collapse:collapse;font-size:.84rem">
         <thead>
-          <tr style="background:#F1F5F9;font-weight:700">
+          <tr style="background:var(--surface-soft);font-weight:700">
             <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border)">Código</th>
             <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border)">Descripción</th>
             <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border)">Cant.</th>
@@ -1372,6 +1497,28 @@ async function fetchProducts(force){
     _productsFetchPromise = null;
   }
 }
+
+// ═══════════════════════════════════════════
+//  MODO OSCURO
+// ═══════════════════════════════════════════
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('poolerie_theme', theme); } catch(e) {}
+  const isDark = theme === 'dark';
+  const icon = isDark ? '☀️' : '🌙';
+  const title = isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+  ['btnThemeApp','btnThemeLogin'].forEach(function(id){
+    const btn = document.getElementById(id);
+    if (btn) { btn.textContent = icon; btn.title = title; }
+  });
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+// El <script> del <head> ya puso el atributo antes de pintar (evita el
+// flash); acá solo se sincronizan los íconos de los botones con eso.
+applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
 
 let currentUser = null;
 let quantities  = {};
@@ -1912,7 +2059,7 @@ function renderTable() {
       : '';
     tr.innerHTML =
       `<td class="cod">${thumb}${esc(x.codigo)}</td>`+
-      `<td class="desc-cell">${dh}${bomBtn}<br><span style="color:#94A3B8;font-size:.72rem">USD lista: ${fmtUSD(x.precio)}</span></td>`+
+      `<td class="desc-cell">${dh}${bomBtn}<br><span style="color:var(--light);font-size:.72rem">USD lista: ${fmtUSD(x.precio)}</span></td>`+
       `<td class="price-cell"><div class="price-ars">${fmtARS(arsConIVA)}</div><div>${dtoBadge}</div></td>`+
       `<td class="qty-cell" style="text-align:center"><div class="qty-stepper">`+
       `<button type="button" class="qty-btn" onclick="stepQty(this,-1)" aria-label="Restar uno">−</button>`+
@@ -2107,7 +2254,7 @@ async function openReview(){
     const afterContado = sumBase - discAmt;
     const ivaAmt = Math.round(afterContado*0.21*100)/100;
     const tot = afterContado + ivaAmt;
-    const ft=document.createElement('tr');ft.style.cssText='font-weight:800;background:#F8FBFF';
+    const ft=document.createElement('tr');ft.style.cssText='font-weight:800;background:var(--surface-soft)';
     ft.innerHTML=`<td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:right">${fmtARS(tot)}</td>`;
     rb.appendChild(ft);
     // Logística: para todos (clientes y vendedores que cargan pedidos por teléfono)
@@ -2587,7 +2734,7 @@ function onClientSearch(q){
         +'</div>';
     }).join('');
     const footer = total > results.length
-      ? '<div style="padding:8px 14px;font-size:.75rem;color:#94A3B8;text-align:center;border-top:1px solid #F0F6FF">Mostrando '+results.length+' de '+total+' — escribí para filtrar</div>'
+      ? '<div style="padding:8px 14px;font-size:.75rem;color:var(--light);text-align:center;border-top:1px solid var(--border)">Mostrando '+results.length+' de '+total+' — escribí para filtrar</div>'
       : '';
     dd.innerHTML = items + footer;
   }
@@ -2800,7 +2947,7 @@ async function openMiCuenta() {
     _lastOrdersList = hist; // para que "Ver detalle" pueda encontrarlo por id
     histEl.innerHTML = hist.length
       ? hist.map(h=>`
-        <div class="hist-item" style="margin-bottom:8px;padding:10px 12px;background:#F8FBFF;border:1px solid var(--border);border-radius:7px">
+        <div class="hist-item" style="margin-bottom:8px;padding:10px 12px;background:var(--surface-soft);border:1px solid var(--border);border-radius:7px">
           <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
             <span style="font-size:.78rem;color:var(--muted)">${new Date(h.fecha).toLocaleString('es-AR')}</span>
             <strong style="color:var(--blue-dark)">${fmtARS(h.totalARS)}</strong>
@@ -3031,7 +3178,7 @@ async function adminImportClientsExcel(input) {
       // Mostrar preview
       const pEl = document.getElementById('adminImportPreview');
       if (pEl) pEl.innerHTML = `
-        <div style="margin-top:20px;background:#F8FBFF;border:1px solid var(--border);border-radius:10px;padding:16px">
+        <div style="margin-top:20px;background:var(--surface-soft);border:1px solid var(--border);border-radius:10px;padding:16px">
           <div class="preview-summary">
             <span class="ps-new">✅ ${newCount} nuevos</span>
             <span class="ps-changed">📝 ${updCount} actualizan datos</span>
