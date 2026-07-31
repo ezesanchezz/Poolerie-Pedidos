@@ -885,6 +885,7 @@ input.qty{width:70px;font-weight:600}
 [data-theme="dark"] .bsm-cuenta:hover{background:var(--surface-soft);color:var(--blue-light)}
 [data-theme="dark"] #clientChip{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
 [data-theme="dark"] #dolarDate{color:var(--muted)}
+[data-theme="dark"] #clientBar{background:var(--surface-soft)}
 [data-theme="dark"] .client-fp select{background:var(--surface)}
 [data-theme="dark"] .contado-box label{color:#4ADE80}
 [data-theme="dark"] .chk-contado{border-color:var(--border)}
@@ -948,22 +949,25 @@ input.qty{width:70px;font-weight:600}
     var(--bg);
 }
 
-/* Botón de modo oscuro */
-.theme-toggle{
-  padding:6px 10px;background:rgba(255,255,255,.14);color:#fff;
-  border:1px solid rgba(255,255,255,.25);border-radius:8px;
-  cursor:pointer;font-size:.95rem;line-height:1;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .15s;
+/* Switch de modo oscuro (track + perilla que se desliza, con texto) */
+.theme-switch{
+  display:flex;align-items:center;gap:8px;background:none;border:none;
+  cursor:pointer;font-family:inherit;color:#fff;padding:4px 2px;
 }
-.theme-toggle:hover{background:rgba(255,255,255,.24)}
-.theme-toggle-login{
-  position:fixed;top:16px;right:16px;z-index:50;
-  padding:8px 10px;background:rgba(255,255,255,.14);color:#fff;
-  border:1px solid rgba(255,255,255,.3);border-radius:8px;
-  cursor:pointer;font-size:1.05rem;line-height:1;
+.theme-switch-track{
+  position:relative;width:42px;height:23px;border-radius:20px;flex-shrink:0;
+  background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.5);
+  transition:background .18s,border-color .18s;
 }
-.theme-toggle-login:hover{background:rgba(255,255,255,.24)}
+.theme-switch-knob{
+  position:absolute;top:1.5px;left:1.5px;width:16px;height:16px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);
+  transition:transform .18s;
+}
+[data-theme="dark"] .theme-switch-track{background:rgba(0,0,0,.35);border-color:rgba(255,255,255,.35)}
+[data-theme="dark"] .theme-switch-knob{transform:translateX(18px)}
+.theme-switch-label{font-size:.8rem;font-weight:700;white-space:nowrap}
+.theme-switch-login{position:fixed;top:16px;right:16px;z-index:50}
 
 </style>
 <script>
@@ -982,7 +986,10 @@ input.qty{width:70px;font-weight:600}
 
 <!-- ══════ LOGIN ══════ -->
 <div id="loginPage">
-  <button class="theme-toggle-login" onclick="toggleTheme()" id="btnThemeLogin" title="Cambiar a modo oscuro">🌙</button>
+  <button class="theme-switch theme-switch-login" onclick="toggleTheme()" id="btnThemeLogin" title="Cambiar tema">
+    <span class="theme-switch-track"><span class="theme-switch-knob"></span></span>
+    <span class="theme-switch-label" id="themeLabelLogin">Tema: Claro</span>
+  </button>
   <!-- Efectos de fondo -->
   <div class="login-blob login-blob-1"></div>
   <div class="login-blob login-blob-2"></div>
@@ -1060,7 +1067,10 @@ input.qty{width:70px;font-weight:600}
     <div class="hright">
       <span class="chip" id="clientChip">—</span>
       <button class="bsm amber" onclick="openClientMgr()" id="btnClientMgr" style="display:none">👥 Clientes</button>
-      <button class="theme-toggle" onclick="toggleTheme()" id="btnThemeApp" title="Cambiar a modo oscuro">🌙</button>
+      <button class="theme-switch" onclick="toggleTheme()" id="btnThemeApp" title="Cambiar tema">
+        <span class="theme-switch-track"><span class="theme-switch-knob"></span></span>
+        <span class="theme-switch-label" id="themeLabelApp">Tema: Claro</span>
+      </button>
       <button class="bsm admin-hbtn" onclick="openAdminPanel('users')" id="btnAdmin" style="display:none">🛠 Admin</button>
       <button class="bsm bsm-cuenta" onclick="openMiCuenta()" id="btnMiCuenta" style="display:none">⚙️ Mi cuenta</button>
       <button class="bsm" onclick="downloadPriceList()" title="Descargar lista de precios en Excel">📄 Lista de precios</button>
@@ -1505,11 +1515,15 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem('poolerie_theme', theme); } catch(e) {}
   const isDark = theme === 'dark';
-  const icon = isDark ? '☀️' : '🌙';
+  const label = isDark ? 'Tema: Oscuro' : 'Tema: Claro';
   const title = isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
   ['btnThemeApp','btnThemeLogin'].forEach(function(id){
     const btn = document.getElementById(id);
-    if (btn) { btn.textContent = icon; btn.title = title; }
+    if (btn) { btn.title = title; }
+  });
+  ['themeLabelApp','themeLabelLogin'].forEach(function(id){
+    const el = document.getElementById(id);
+    if (el) { el.textContent = label; }
   });
 }
 function toggleTheme() {
