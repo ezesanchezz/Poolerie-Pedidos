@@ -556,9 +556,6 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   #vendorBar .fg{min-width:100%;flex:none}
   .client-switcher{flex-direction:column;gap:4px;width:100%}
   .client-switcher select{min-width:100%;width:100%}
-  .client-search-wrap{width:100%}
-  .client-search-input{width:100%!important}
-  .client-dropdown{max-height:260px}
   .vdesc-b{font-size:.78rem}
 
   /* CLIENT BAR */
@@ -866,42 +863,10 @@ input.qty{width:70px;font-weight:600}
 .desc-pill{font-size:.82rem;padding:6px 16px}
 
 
-/* ══════ CLIENT SEARCH (vendor) ══════ */
-.client-search-wrap{position:relative;flex:1;min-width:220px}
-.client-search-input{
-  width:100%;padding:8px 12px 8px 34px;
-  border:2px solid #1E4D7B;border-radius:8px;
-  background:#0D2D50 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%234A6D8C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 10px center;
-  background-size:14px 14px;
-  color:#E2E8F0;font-size:.84rem;
-  font-family:inherit;outline:none;transition:border-color .18s;
-}
-.client-search-input::placeholder{color:#4A6D8C}
-.client-search-input:focus{border-color:#60A5FA}
-
-.client-dropdown{
-  position:absolute;top:calc(100% + 6px);left:0;right:0;
-  background:#fff;border-radius:10px;
-  box-shadow:0 8px 32px rgba(0,0,0,.18);
-  z-index:500;max-height:380px;overflow-y:auto;
-  border:1px solid var(--border);display:none;
-}
-.client-dropdown.open{display:block}
-.client-dd-item{
-  padding:10px 14px;cursor:pointer;border-bottom:1px solid #F0F6FF;
-  transition:background .1s;
-}
-.client-dd-item:last-child{border-bottom:none}
-.client-dd-item:hover{background:#F0F8FF}
-.client-dd-item:hover .cdd-name{color:var(--blue)}
-.cdd-name{font-size:.85rem;font-weight:700;color:var(--text)}
-.cdd-cuit{font-size:.73rem;color:var(--muted);margin-top:1px}
-.cdd-badge{
-  display:inline-block;background:#DBEAFE;color:#1E40AF;
-  font-size:.65rem;font-weight:700;padding:1px 6px;
-  border-radius:4px;margin-left:6px;vertical-align:middle;
-}
-.cdd-empty{padding:16px;text-align:center;color:var(--muted);font-size:.82rem}
+/* ══════ CLIENTE ELEGIDO (vendor) ══════
+   La búsqueda para elegir cliente vive ahora en un solo lugar: el modal
+   "Gestor de Clientes" (doble click en un cliente lo selecciona). Acá
+   solo queda el indicador de quién está elegido. */
 .client-selected-tag{
   display:none;align-items:center;gap:6px;
   background:rgba(91,191,172,.2);border:1px solid rgba(91,191,172,.4);
@@ -956,19 +921,18 @@ input.qty{width:70px;font-weight:600}
 [data-theme="dark"] .subars{color:#4ADE80}
 [data-theme="dark"] .price-ars{color:#5EC4E8}
 [data-theme="dark"] .footer,[data-theme="dark"] .mcard,[data-theme="dark"] .admin-panel,
-[data-theme="dark"] .client-dropdown,[data-theme="dark"] .cat-slider-wrap,[data-theme="dark"] .cat-arrow,
+[data-theme="dark"] .cat-slider-wrap,[data-theme="dark"] .cat-arrow,
 [data-theme="dark"] #breakdownModal .bk-box{background:var(--surface)}
 [data-theme="dark"] .bdl:disabled,[data-theme="dark"] .bsend:disabled{background:var(--border)}
 [data-theme="dark"] .rinfo,[data-theme="dark"] .admin-tabs,[data-theme="dark"] .admin-form{background:var(--surface-soft)}
 [data-theme="dark"] .rtbl td,[data-theme="dark"] .client-row,[data-theme="dark"] .admin-table td,
-[data-theme="dark"] .hist-item,[data-theme="dark"] .od-row td,[data-theme="dark"] .client-dd-item{border-bottom-color:var(--border)}
+[data-theme="dark"] .hist-item,[data-theme="dark"] .od-row td{border-bottom-color:var(--border)}
 [data-theme="dark"] .bback,[data-theme="dark"] .bcancel,[data-theme="dark"] .admin-btn-cancel,
 [data-theme="dark"] .admin-form-grid input[readonly],[data-theme="dark"] .pass-cell,
-[data-theme="dark"] .admin-table tr:hover td,[data-theme="dark"] .hist-item:hover,
-[data-theme="dark"] .client-dd-item:hover{background:var(--surface-soft)}
+[data-theme="dark"] .admin-table tr:hover td,[data-theme="dark"] .hist-item:hover{background:var(--surface-soft)}
 [data-theme="dark"] .pass-cell{color:var(--muted)}
 [data-theme="dark"] .admin-table .del.small{background:rgba(239,68,68,.16);border-color:rgba(248,113,113,.35);color:#F87171}
-[data-theme="dark"] .rol-badge.vend,[data-theme="dark"] .hi-btn-view,[data-theme="dark"] .cdd-badge{background:rgba(96,165,250,.16);color:#93C5FD}
+[data-theme="dark"] .rol-badge.vend,[data-theme="dark"] .hi-btn-view{background:rgba(96,165,250,.16);color:#93C5FD}
 [data-theme="dark"] .hi-btn-view{border-color:rgba(147,197,253,.4)}
 [data-theme="dark"] .rol-badge.cli,[data-theme="dark"] .ps-new,[data-theme="dark"] .new-price,
 [data-theme="dark"] .hi-btn-copy{background:rgba(34,197,94,.16);color:#4ADE80}
@@ -1163,24 +1127,12 @@ input.qty{width:70px;font-weight:600}
       </select>
     </div>
     <div class="vsep"></div>
-    <div class="client-switcher" style="flex-direction:column;gap:6px;min-width:280px">
-      <label>Buscar cliente</label>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="client-search-wrap">
-          
-          <input type="text" class="client-search-input" id="clientSearchInput"
-            placeholder="Razón social o CUIT..."
-            oninput="onClientSearch(this.value)"
-            onfocus="onClientSearch(this.value)"
-            onblur="setTimeout(()=>closeClientDropdown(),180)"
-            autocomplete="off" />
-          <div class="client-dropdown" id="clientDropdown"></div>
-        </div>
-        <div class="client-selected-tag" id="clientSelectedTag">
-          <span id="clientSelectedName">—</span>
-          <button class="hi-btn hi-btn-view" style="font-size:.72rem;padding:3px 8px" onclick="openHistoryForClient(_activeClientKey)">📋 Historial</button>
-          <span class="cst-clear" onclick="clearClientSelection()">✕</span>
-        </div>
+    <div class="client-switcher" style="flex-direction:column;gap:6px;min-width:0">
+      <div class="client-selected-tag" id="clientSelectedTag">
+        <span id="clientSelectedName">—</span>
+        <button class="hi-btn hi-btn-view" style="font-size:.72rem;padding:3px 8px" onclick="openHistoryForClient(_activeClientKey)">📋 Historial</button>
+        <button class="hi-btn hi-btn-view" style="font-size:.72rem;padding:3px 8px" onclick="openClientMgr()">🔄 Cambiar</button>
+        <span class="cst-clear" onclick="clearClientSelection()">✕</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
         <label style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Descuento (%)</label>
@@ -1350,7 +1302,7 @@ input.qty{width:70px;font-weight:600}
 <div class="modal-overlay" id="clientModal">
   <div class="mcard" style="max-width:520px;max-height:90vh;display:flex;flex-direction:column">
     <h2 style="margin-bottom:6px">&#128101; Descuentos por cliente</h2>
-    <p style="margin-bottom:12px;font-size:.82rem">Los cambios se guardan en este dispositivo y se aplican cuando el cliente inicia sesión.</p>
+    <p style="margin-bottom:12px;font-size:.82rem">Doble click en un cliente para elegirlo y armar su pedido. Los descuentos se guardan en el servidor — el cambio lo ve cualquiera que mire a ese cliente, no solo vos.</p>
     <div style="position:relative;margin-bottom:12px">
       <input type="text" id="clientMgrSearch"
         placeholder="Buscar por razón social o CUIT..."
@@ -2655,7 +2607,7 @@ function filterClientMgr(q){
       ? '<span style="color:var(--blue);font-size:.7rem;font-weight:700">&#128273; portal</span>'
       : '';
     div.innerHTML =
-      '<div style="flex:1;min-width:0">'
+      '<div style="flex:1;min-width:0;cursor:pointer" ondblclick="selectClientFromMgr(\''+esc(client.key)+'\',\''+esc(client.razonSocial)+'\',\''+esc(client.cuit||'')+'\','+client.descuento+')" title="Doble click para elegir este cliente">'
         +'<div class="cr-name">'+esc(client.razonSocial)+' '+badge+'</div>'
         +'<div class="cr-cuit">'+esc(client.cuit||'—')+'</div>'
       +'</div>'
@@ -2818,60 +2770,23 @@ async function fetchAdminUserLists(force){
   return { clients:_clientListCache, vendors:_vendorsCache };
 }
 
-function onClientSearch(q){
-  const dd = document.getElementById('clientDropdown');
-  const term = normalize(q||'');
-  const all = getClientList();
-  const results = term.length === 0
-    ? all.slice(0,40)
-    : all.filter(c=>
-        normalize(c.razonSocial).includes(term) ||
-        (c.cuit && c.cuit.replace(/-/g,'').includes(term.replace(/-/g,'')))
-      ).slice(0,30);
-  const total = term.length === 0 ? all.length : all.filter(c=>
-    normalize(c.razonSocial).includes(term)||
-    (c.cuit&&c.cuit.replace(/-/g,'').includes(term.replace(/-/g,'')))).length;
-  if(!results.length){
-    dd.innerHTML = '<div class="cdd-empty">Sin resultados.</div>';
-  } else {
-    const items = results.map(c=>{
-      const nom = esc(c.razonSocial);
-      const badge = c.hasLogin ? '<span class="cdd-badge">&#128273; acceso</span>' : '';
-      return '<div class="client-dd-item"'
-        +' data-key="'+esc(c.key)+'"'
-        +' data-nom="'+nom+'"'
-        +' data-cuit="'+esc(c.cuit||'')+'"'
-        +' data-desc="'+c.descuento+'"'
-        +' onmousedown="ddSelectClient(this)">'
-        +'<div class="cdd-name">'+nom+badge+'</div>'
-        +'<div class="cdd-cuit">CUIT '+esc(c.cuit||'—')+' &middot; Dto. '+c.descuento.toFixed(1)+'%</div>'
-        +'</div>';
-    }).join('');
-    const footer = total > results.length
-      ? '<div style="padding:8px 14px;font-size:.75rem;color:var(--light);text-align:center;border-top:1px solid var(--border)">Mostrando '+results.length+' de '+total+' — escribí para filtrar</div>'
-      : '';
-    dd.innerHTML = items + footer;
-  }
-  dd.classList.add('open');
-}
-function ddSelectClient(el){
-  selectClientFromSearch(el.dataset.key, el.dataset.nom, el.dataset.cuit, parseFloat(el.dataset.desc));
-}
+// Elegir cliente vive en un solo lugar: "Gestor de Clientes" (doble click
+// en una fila). Antes había un buscador aparte acá arriba con el mismo
+// resultado — se sacó porque era confuso tener dos formas distintas de
+// hacer lo mismo.
 let _activeClientKey = '';
-function selectClientFromSearch(key, nombre, cuit, descuento){
-  closeClientDropdown();
+function selectClientFromMgr(key, nombre, cuit, descuento){
   _activeClientKey = key;
-  document.getElementById('clientSearchInput').value = '';
   document.getElementById('descuento').value = descuento;
   recalcAll();
   document.getElementById('clientSelectedName').textContent = nombre + '  —  ' + descuento.toFixed(1) + '%';
   document.getElementById('clientSelectedTag').classList.add('show');
+  closeClientMgr();
   showToast(nombre + ' · ' + descuento.toFixed(1) + '%', 'ok');
 }
 
 function clearClientSelection(){
   document.getElementById('clientSelectedTag').classList.remove('show');
-  document.getElementById('clientSearchInput').value = '';
   _activeClientKey = '';
 }
 
@@ -2886,13 +2801,6 @@ function getEffectiveClient(){
     if (c) return { key: c.key, razonSocial: c.razonSocial, cuit: c.cuit || '', email: '' };
   }
   return null;
-}
-
-
-
-function closeClientDropdown(){
-  const dd = document.getElementById('clientDropdown');
-  if(dd) dd.classList.remove('open');
 }
 
 function loadClientProfile(){ /* compatibilidad — no-op */ }
