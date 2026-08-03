@@ -1,0 +1,37 @@
+name: Desplegar a pedidos.poolerie.com (FTP)
+
+# Se dispara solo con cambios en el HTML del portal — así no se sube nada
+# de más (backend.gs vive aparte, en el editor de Apps Script) cada vez
+# que se toca otra cosa del repo.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'poolerie_pedidos.html'
+
+jobs:
+  ftp-deploy:
+    name: Subir por FTP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # El servidor espera "index.html" como página de entrada del
+      # subdominio; el archivo real se llama poolerie_pedidos.html (así
+      # queda también en Vercel, que sí lo redirige a mano). Se arma una
+      # carpeta aparte solo para el FTP, sin tocar el nombre real del
+      # archivo en el repo.
+      - name: Preparar carpeta a subir
+        run: |
+          mkdir dist
+          cp poolerie_pedidos.html dist/index.html
+
+      - name: Subir por FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: 46.105.222.220
+          username: pedidos_ftp
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: /
