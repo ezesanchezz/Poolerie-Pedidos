@@ -508,7 +508,7 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
 .btn-detalle{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:2px 8px;font-size:.72rem;font-weight:600;color:var(--primary);background:#EFF6FF;border:1px solid #BFDBFE;border-radius:5px;cursor:pointer;vertical-align:middle;white-space:nowrap;transition:background .15s;}
 .btn-detalle:hover{background:#DBEAFE;}
 /* ── Modal desglose ── */
-#breakdownModal{display:none;position:fixed;inset:0;z-index:9000;align-items:center;justify-content:center;padding:16px;}
+#breakdownModal{display:none;position:fixed;inset:0;z-index:9000;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
 #breakdownModal.open{display:flex;}
 #breakdownModal .bk-overlay{position:absolute;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(2px);}
 #breakdownModal .bk-box{position:relative;background:#fff;border-radius:16px;padding:22px 30px 20px;max-width:780px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;}
@@ -657,6 +657,26 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   .rtbl-total{display:flex;justify-content:space-between;padding:8px 0}
   .rmbtns{flex-wrap:wrap}
   .bback,.bconfirm{flex:1;text-align:center}
+
+  /* DETALLE DE PRODUCTO (composición) — mismo apilado. Antes, con
+     table-layout:fixed y sin ancho propio, la columna de código se
+     quedaba con casi todo el espacio y la de descripción con apenas
+     unos px, así que un texto largo ahí estiraba la fila cientos de
+     píxeles de alto (quedaba fuera de pantalla e imposible de cerrar). */
+  #breakdownModal .bk-table{font-size:.8rem}
+  #breakdownModal .bk-table thead{display:none}
+  #breakdownModal .bk-table tbody{display:block}
+  #breakdownModal .bk-table tr{
+    display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;
+    padding:6px 0;border-bottom:1px solid var(--border);
+  }
+  #breakdownModal .bk-table td{display:block;padding:0!important;border:none!important}
+  #breakdownModal .bk-cod-cell{order:1;flex:0 0 100%;font-size:.68rem;color:var(--light)}
+  #breakdownModal .bk-desc-cell{order:2;flex:1 1 100%}
+  #breakdownModal .bk-table .cant-col{order:3;flex:0 0 auto;width:auto!important;text-align:left!important}
+  #breakdownModal .bk-table .cant-col::before{content:'Cant.: '}
+  #breakdownModal .bk-table .unit-col{order:4;flex:0 0 auto;width:auto!important;text-align:left!important;padding-left:0!important}
+  #breakdownModal .bk-table .sub-row .bk-cod-cell{padding-left:14px!important}
 
   /* HIST MODAL */
   .hist-modal{max-width:100%}
@@ -924,6 +944,10 @@ input.qty{width:70px;font-weight:600}
 [data-theme="dark"] .bsel{background:rgba(96,165,250,.16);border-color:rgba(147,197,253,.4);color:#93C5FD}
 [data-theme="dark"] .bsel:hover{background:rgba(96,165,250,.28)}
 [data-theme="dark"] table{background:var(--surface)}
+/* #tbl tiene su propio background:#fff con especificidad de ID (ver
+   #tbl{...} en la sección del catálogo) — le gana a la regla de arriba
+   sin este empate explícito, y quedaba blanco fijo en modo oscuro. */
+[data-theme="dark"] #tbl{background:var(--surface)}
 [data-theme="dark"] .catrow td{color:#7DD3FC}
 [data-theme="dark"] tbody tr:not(.catrow){border-bottom-color:var(--border)}
 [data-theme="dark"] .dto-badge{background:rgba(34,197,94,.16);color:#4ADE80;border-color:rgba(74,222,128,.35)}
@@ -2251,12 +2275,12 @@ function openBreakdown(cod){
   let rows='';
   b.items.forEach(function(it){
     if(it.sub && it.sub.length){
-      rows+=`<tr class="asm-row"><td><span style="font-family:monospace;font-size:.78rem">${esc(it.cod)}</span></td><td>${esc(it.desc)}</td><td class="cant-col">${it.cant}</td><td class="unit-col">${esc(it.unit)}</td></tr>`;
+      rows+=`<tr class="asm-row"><td class="bk-cod-cell"><span style="font-family:monospace;font-size:.78rem">${esc(it.cod)}</span></td><td class="bk-desc-cell">${esc(it.desc)}</td><td class="cant-col">${it.cant}</td><td class="unit-col">${esc(it.unit)}</td></tr>`;
       it.sub.forEach(function(s){
-        rows+=`<tr class="sub-row"><td><span style="font-family:monospace;font-size:.78rem">${esc(s.cod)}</span></td><td>${esc(s.desc)}</td><td class="cant-col">${s.cant}</td><td class="unit-col">${esc(s.unit)}</td></tr>`;
+        rows+=`<tr class="sub-row"><td class="bk-cod-cell"><span style="font-family:monospace;font-size:.78rem">${esc(s.cod)}</span></td><td class="bk-desc-cell">${esc(s.desc)}</td><td class="cant-col">${s.cant}</td><td class="unit-col">${esc(s.unit)}</td></tr>`;
       });
     } else {
-      rows+=`<tr><td><span style="font-family:monospace;font-size:.78rem">${esc(it.cod)}</span></td><td>${esc(it.desc)}</td><td class="cant-col">${it.cant}</td><td class="unit-col">${esc(it.unit)}</td></tr>`;
+      rows+=`<tr><td class="bk-cod-cell"><span style="font-family:monospace;font-size:.78rem">${esc(it.cod)}</span></td><td class="bk-desc-cell">${esc(it.desc)}</td><td class="cant-col">${it.cant}</td><td class="unit-col">${esc(it.unit)}</td></tr>`;
     }
   });
   const prod=PRODUCTS.find(function(x){return x.codigo===cod;});
