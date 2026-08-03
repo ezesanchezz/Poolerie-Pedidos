@@ -36,3 +36,8 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: /
+          # FileZilla se conecta con TLS explícito ("Conexión TLS
+          # establecida") — sin esto la acción probaba FTP plano y el
+          # servidor cortaba la conexión (ECONNRESET).
+          protocol: ftps
+          security: loose
