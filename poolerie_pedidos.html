@@ -428,6 +428,15 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   background:#fff;width:100%;max-width:980px;height:100vh;max-height:100vh;
   display:flex;flex-direction:column;border-radius:0;box-shadow:0 0 60px rgba(0,0,0,.4);
 }
+@supports (height:100dvh){
+  /* 100vh en mobile no tiene en cuenta que la barra de direcciones del
+     navegador aparece/desaparece — el panel podía quedar más alto que lo
+     realmente visible, tapando el botón de cerrar detrás de esa barra.
+     100dvh se ajusta al alto real visible en cada momento. Con @supports
+     como resguardo por si algún navegador viejo no lo entiende (ahí sigue
+     usando 100vh, como ya funcionaba). */
+  .admin-panel{height:100dvh;max-height:100dvh}
+}
 .admin-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 24px;background:linear-gradient(135deg,#1E3A5F,#0D6EBD);
@@ -1342,7 +1351,7 @@ input.qty{width:70px;font-weight:600}
 <!-- CLIENT MGR MODAL -->
 <div class="modal-overlay" id="clientModal">
   <div class="mcard" style="max-width:520px;max-height:90vh;display:flex;flex-direction:column">
-    <h2 style="margin-bottom:6px">&#128101; Descuentos por cliente</h2>
+    <h2 style="margin-bottom:6px">&#128101; Clientes</h2>
     <p style="margin-bottom:12px;font-size:.82rem">Doble click en un cliente para elegirlo y armar su pedido. Los descuentos se guardan en el servidor — el cambio lo ve cualquiera que mire a ese cliente, no solo vos.</p>
     <div style="position:relative;margin-bottom:12px">
       <input type="text" id="clientMgrSearch"
@@ -1635,10 +1644,38 @@ function setCatalogView(view) {
   // navegador haya leído modales que están más abajo en el archivo (ej.
   // #breakdownModal, el de "Ver detalle" de composición de producto) — un
   // querySelectorAll acá arriba no los encontraría.
+  //
+  // overflow:hidden solo no alcanza en algunos celulares (iOS Safari
+  // puntualmente): con el "rebote" de scroll, el fondo se puede seguir
+  // moviendo un toque por debajo del modal. Además de overflow:hidden, se
+  // fija el body con position:fixed en el scroll actual — así queda
+  // completamente inmóvil pase lo que pase, y al cerrar se lo devuelve
+  // exactamente a donde estaba (sin salto).
+  let savedScrollY = 0;
+  let locked = false;
   function sync() {
-    const anyOpen = document.querySelector('.modal-overlay.open, #breakdownModal.open');
-    document.documentElement.style.overflow = anyOpen ? 'hidden' : '';
-    document.body.style.overflow = anyOpen ? 'hidden' : '';
+    const anyOpen = !!document.querySelector('.modal-overlay.open, #breakdownModal.open');
+    if (anyOpen && !locked) {
+      savedScrollY = window.scrollY || window.pageYOffset || 0;
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = (-savedScrollY) + 'px';
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      locked = true;
+    } else if (!anyOpen && locked) {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      window.scrollTo(0, savedScrollY);
+      locked = false;
+    }
   }
   new MutationObserver(sync).observe(document.body, {
     attributes: true, attributeFilter: ['class'], subtree: true
