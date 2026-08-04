@@ -269,6 +269,16 @@ header{
 .bsel{padding:8px 14px;background:#DBEAFE;border:2px solid #93C5FD;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:600;color:#1E40AF;white-space:nowrap;font-family:inherit}
 .bsel:hover{background:#BFDBFE}
 
+/* Selector lista/tarjetas del catálogo — como el de un explorador de
+   archivos. Elección del usuario, no automática por tamaño de pantalla
+   (eso generaba confusión: "¿por qué cambió solo?"). Se guarda por
+   navegador. En mobile no se muestra: ahí siempre es apilado, no hay
+   una tabla real que mostrar como alternativa. */
+.view-toggle{display:flex;border:2px solid var(--border);border-radius:8px;overflow:hidden;flex-shrink:0}
+.view-toggle-btn{padding:7px 12px;background:var(--surface);border:none;cursor:pointer;font-size:1rem;line-height:1;color:var(--muted);transition:background .15s,color .15s;font-family:inherit}
+.view-toggle-btn+.view-toggle-btn{border-left:2px solid var(--border)}
+.view-toggle-btn.active{background:var(--primary);color:#fff}
+
 /* TABLE */
 .twrap{flex:1;padding:16px 20px;overflow-x:auto}
 #tbl{
@@ -570,6 +580,7 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   .sbar input[type=text]{min-width:0;font-size:.82rem}
   .sbar select{max-width:140px;font-size:.79rem}
   .bclr,.bsel{padding:7px 10px;font-size:.76rem}
+  .view-toggle{display:none} /* en mobile siempre es apilado, no hay tabla real para elegir */
 
   /* CATEGORY TABS */
   .cat-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding:0 12px;scrollbar-width:none}
@@ -694,6 +705,32 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   .admin-tab{white-space:nowrap;flex-shrink:0}
   .admin-table{font-size:.76rem}
   .admin-table th,.admin-table td{padding:6px 8px}
+}
+
+/* ══════════════════════════════════════
+   CATÁLOGO EN TARJETAS — elección del usuario (botón ☰/▦ del buscador),
+   no automática por ancho de pantalla. auto-fill hace que la cantidad
+   de columnas se ajuste sola a cualquier monitor. Gateado con
+   min-width:769px para que nunca compita con el apilado forzado de
+   mobile (ver @media(max-width:768px) más arriba).
+══════════════════════════════════════ */
+@media(min-width:769px){
+  #tbl.view-cards{min-width:0;width:100%;background:transparent;box-shadow:none;border-radius:0}
+  #tbl.view-cards thead{display:none}
+  #tbl.view-cards tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:14px;align-items:start}
+  #tbl.view-cards tbody tr.catrow{grid-column:1/-1;border-radius:8px}
+  #tbl.view-cards tbody tr:not(.catrow){
+    display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.05);
+  }
+  #tbl.view-cards tbody td{display:block;padding:0!important;border:none!important}
+  #tbl.view-cards td.cod{order:1;flex:0 0 auto;display:flex;align-items:center;gap:8px;font-size:.72rem}
+  #tbl.view-cards .prod-thumb{width:56px;height:56px;margin-bottom:0}
+  #tbl.view-cards td.desc-cell{order:2;flex:1 1 100%;font-weight:600}
+  #tbl.view-cards td.price-cell{order:3;flex:0 0 auto;text-align:left!important}
+  #tbl.view-cards td.qty-cell{order:4;flex:0 0 auto;margin-left:auto}
+  #tbl.view-cards td.subars{display:none}
 }
 
 /* TOAST */
@@ -1219,6 +1256,10 @@ input.qty{width:70px;font-weight:600}
     </select>
     <button class="bclr" onclick="clearQtys()">🗑 Limpiar</button>
     <button class="bsel" id="btnSoloSel" onclick="toggleSoloSel()" style="display:none">🛒 Ver seleccionados</button>
+    <div class="view-toggle" id="viewToggle" role="group" aria-label="Cómo ver el catálogo">
+      <button type="button" class="view-toggle-btn" id="viewBtnList" onclick="setCatalogView('list')" title="Ver en lista">☰</button>
+      <button type="button" class="view-toggle-btn" id="viewBtnCards" onclick="setCatalogView('cards')" title="Ver en tarjetas">▦</button>
+    </div>
   </div>
   </div>
 
@@ -1540,6 +1581,25 @@ function toggleTheme() {
 // El <script> del <head> ya puso el atributo antes de pintar (evita el
 // flash); acá solo se sincronizan los íconos de los botones con eso.
 applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+// ═══════════════════════════════════════════
+//  LISTA / TARJETAS (catálogo) — elección del usuario, se guarda por
+//  navegador. Nunca cambia sola por el ancho de pantalla.
+// ═══════════════════════════════════════════
+function setCatalogView(view) {
+  const tbl = document.getElementById('tbl');
+  if (tbl) tbl.classList.toggle('view-cards', view === 'cards');
+  try { localStorage.setItem('poolerie_catalog_view', view); } catch(e) {}
+  const btnList = document.getElementById('viewBtnList');
+  const btnCards = document.getElementById('viewBtnCards');
+  if (btnList) btnList.classList.toggle('active', view !== 'cards');
+  if (btnCards) btnCards.classList.toggle('active', view === 'cards');
+}
+(function() {
+  let saved = 'list';
+  try { saved = localStorage.getItem('poolerie_catalog_view') || 'list'; } catch(e) {}
+  setCatalogView(saved);
+})();
 
 // ═══════════════════════════════════════════
 //  ALTURA REAL DEL HEADER (para que categorías + buscador
