@@ -1233,44 +1233,9 @@ input.qty{width:70px;font-weight:600}
     <input type="text" id="srch" placeholder="🔍  Buscar por descripción o código..." oninput="renderTable()" />
     <select id="catF" onchange="onCatSelectChange()">
       <option value="">Todas las categorías</option>
-        <option value="ACCESORIOS DE CONEXIÓN">ACCESORIOS DE CONEXIÓN</option>
-        <option value="ACCESORIOS DE PVC-U">ACCESORIOS DE PVC-U</option>
-        <option value="ACCESORIOS PARA HIDROMASAJES">ACCESORIOS PARA HIDROMASAJES</option>
-        <option value="ACOPLES">ACOPLES</option>
-        <option value="ADHESIVOS">ADHESIVOS</option>
-        <option value="BOMBA LACUS">BOMBA LACUS</option>
-        <option value="BOMBA POOLERIE">BOMBA POOLERIE</option>
-        <option value="BOMBAS AUTODRENANTES">BOMBAS AUTODRENANTES</option>
-        <option value="BOMBAS SOPLADORAS">BOMBAS SOPLADORAS</option>
-        <option value="BOYAS DOSIFICADORAS">BOYAS DOSIFICADORAS</option>
-        <option value="CALEFACCIÓN | TERMÓMETROS">CALEFACCIÓN | TERMÓMETROS</option>
-        <option value="CARGAS FILTRANTES">CARGAS FILTRANTES</option>
-        <option value="CASILLAS">CASILLAS</option>
-        <option value="CEPILLOS">CEPILLOS</option>
-        <option value="CONTROLADORES | FUENTES">CONTROLADORES | FUENTES</option>
-        <option value="CUADRO DE VÁLVULAS DE 2, 3 y 4 VÍAS">CUADRO DE VÁLVULAS DE 2, 3 y 4 VÍAS</option>
-        <option value="DOSIFICADOR DE CLORO">DOSIFICADOR DE CLORO</option>
-        <option value="FILTRO LACUS">FILTRO LACUS</option>
-        <option value="FILTRO POOLERIE">FILTRO POOLERIE</option>
-        <option value="KIT CAÑERÍA DE CALEFACCIÓN">KIT CAÑERÍA DE CALEFACCIÓN</option>
-        <option value="KIT EQUIPO FILTRADO COMPLETO">KIT EQUIPO FILTRADO COMPLETO</option>
-        <option value="KIT HIDROMASAJES">KIT HIDROMASAJES</option>
-        <option value="KIT LIMPIEZA MANTENIMIENTO">KIT LIMPIEZA MANTENIMIENTO</option>
-        <option value="KIT SKIMMER Y RETORNOS">KIT SKIMMER Y RETORNOS</option>
-        <option value="LABORATORIOS">LABORATORIOS</option>
-        <option value="LIMPIAFONDOS">LIMPIAFONDOS</option>
-        <option value="LIMPIAFONDOS PARA MINI PISCINAS">LIMPIAFONDOS PARA MINI PISCINAS</option>
-        <option value="LUMINARIAS - LED">LUMINARIAS - LED</option>
-        <option value="MANGOS">MANGOS</option>
-        <option value="MANGUERAS">MANGUERAS</option>
-        <option value="PRODUCTOS">PRODUCTOS</option>
-        <option value="REBOSADEROS">REBOSADEROS</option>
-        <option value="RETORNOS ORIENTABLES">RETORNOS ORIENTABLES</option>
-        <option value="SACAHOJAS">SACAHOJAS</option>
-        <option value="SKIMMERS">SKIMMERS</option>
-        <option value="TABLEROS ELÉCTRICOS">TABLEROS ELÉCTRICOS</option>
-        <option value="VIROLAS">VIROLAS</option>
-        <option value="iGARDEN SERIE M1">iGARDEN SERIE M1</option>
+      <!-- Las opciones de categoría se arman solas en buildCatTabs(), con
+           los mismos datos que ya vienen del catálogo — así nunca hay que
+           acordarse de actualizar esta lista a mano de nuevo. -->
     </select>
     <button class="bclr" onclick="clearQtys()">🗑 Limpiar</button>
     <button class="bsel" id="btnSoloSel" onclick="toggleSoloSel()" style="display:none">🛒 Ver seleccionados</button>
@@ -1553,6 +1518,17 @@ let sessionToken = null;
 let PRODUCTS = [];
 let _productsUpdatedAt = null;
 let _productsFetchPromise = null;
+
+// Esta categoría siempre se muestra al final (tabs y listado del catálogo),
+// sin importar el orden en que vengan los productos del backend.
+const CAT_AL_FINAL = 'CASCOS - LAGUNE';
+function ordenarCategorias(cats) {
+  return [...cats].sort((a,b) => {
+    if (a === CAT_AL_FINAL && b !== CAT_AL_FINAL) return 1;
+    if (b === CAT_AL_FINAL && a !== CAT_AL_FINAL) return -1;
+    return a.localeCompare(b);
+  });
+}
 async function fetchProducts(force){
   if (PRODUCTS.length && !force) return PRODUCTS;
   // Si ya hay una carga en curso (p.ej. disparada en paralelo con el login),
@@ -2195,6 +2171,8 @@ function renderTable() {
     (!search || x.descripcion.toLowerCase().includes(search) || x.codigo.toLowerCase().includes(search)) &&
     (!soloSel || quantities[x.codigo]>0)
   );
+  // manda CAT_AL_FINAL al final del listado; el resto mantiene su orden original
+  filtered.sort((a,b) => (a.categoria===CAT_AL_FINAL) - (b.categoria===CAT_AL_FINAL));
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
   if (!filtered.length) {
@@ -2787,8 +2765,8 @@ function buildCatTabs(){
   all.dataset.cat = '';
   all.onclick = () => selectCatTab('', all);
   tabs.appendChild(all);
-  // Tabs por categoría (orden alfabético, ya viene así en PRODUCTS)
-  const cats = [...new Set(PRODUCTS.map(p=>p.categoria))].sort();
+  // Tabs por categoría (orden alfabético, con CAT_AL_FINAL siempre al final)
+  const cats = ordenarCategorias([...new Set(PRODUCTS.map(p=>p.categoria))]);
   cats.forEach(cat => {
     const btn = document.createElement('button');
     btn.className = 'cat-tab';
@@ -2797,6 +2775,16 @@ function buildCatTabs(){
     btn.onclick = () => selectCatTab(cat, btn);
     tabs.appendChild(btn);
   });
+  // El <select id="catF"> se arma con el mismo listado y orden que los tabs
+  // de arriba, así nunca quedan categorías desincronizadas entre los dos
+  // (antes tenía una lista fija escrita a mano en el HTML que se desactualizaba).
+  const sel = document.getElementById('catF');
+  if (sel) {
+    const prevVal = sel.value;
+    sel.innerHTML = '<option value="">Todas las categorías</option>'
+      + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    if (cats.includes(prevVal)) sel.value = prevVal;
+  }
 }
 
 // Guarda en quantities todos los inputs visibles antes de re-renderizar
