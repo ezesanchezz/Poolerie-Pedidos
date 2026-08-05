@@ -18,7 +18,7 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Roboto:wght@400;500;700;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:107.5%} /* letra un poco más grande en todo el sitio, para que se lea mejor */
+html{font-size:107.5%;overflow-x:hidden} /* letra un poco más grande en todo el sitio, para que se lea mejor */
 /* Evita que tocar dos veces rápido un botón (ej. el "+" de cantidad) se
    interprete como doble-tap para hacer zoom — el pinch-zoom con dos dedos
    sigue funcionando igual, esto solo afecta el gesto de doble-tap. */
@@ -322,11 +322,20 @@ input.qty{
   width:65px;padding:6px 8px;border:2px solid var(--border);
   border-radius:7px;text-align:center;font-size:.9rem;
   outline:none;transition:border-color .15s,background .15s;font-family:inherit;
+  -moz-appearance:textfield; /* oculta las flechitas nativas: ahora se usan los botones +/- en todas las pantallas */
 }
+input.qty::-webkit-outer-spin-button,input.qty::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 input.qty:focus{border-color:var(--blue)}
 input.qty.hv{border-color:#22C55E;background:#F0FDF4;font-weight:700;color:#15803D}
 .qty-stepper{display:flex;align-items:center;gap:4px}
-.qty-btn{display:none} /* en desktop se usan las flechitas nativas del input; en mobile se muestran estos botones (ver media query) */
+.qty-btn{
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  width:28px;height:28px;border-radius:6px;border:2px solid var(--border);
+  background:#fff;font-size:1.05rem;font-weight:700;color:var(--blue-dark);
+  line-height:1;cursor:pointer;font-family:inherit;transition:background .15s,border-color .15s;
+}
+.qty-btn:hover{background:#F8FBFF;border-color:var(--blue)}
+.qty-btn:active{background:#EFF6FF;border-color:var(--blue)}
 .subars{text-align:right;font-weight:700;color:#16A34A;min-width:105px}
 .nores{text-align:center;padding:52px;color:var(--light);font-size:.95rem}
 mark{background:#FEF08A;border-radius:3px;padding:0 2px}
@@ -385,14 +394,14 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
 .rinfo{
   background:#F8FBFF;border-radius:10px;padding:12px 16px;
   margin-bottom:14px;font-size:.82rem;
-  display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 18px;
   border:1px solid var(--border);
 }
-.rinfo span{color:var(--muted)}.rinfo strong{color:var(--text)}
+.rinfo span{color:var(--muted)}.rinfo strong{color:var(--text);word-break:break-word}
 .rtbl{width:100%;border-collapse:collapse;font-size:.8rem;margin-bottom:16px;max-height:280px;overflow-y:auto;display:block}
 .rtbl thead{background:var(--grad);color:#fff;position:sticky;top:0}
 .rtbl th{padding:8px 10px;text-align:left;white-space:nowrap;font-weight:700}
-.rtbl td{padding:7px 10px;border-bottom:1px solid #F0F6FF}
+.rtbl td{padding:7px 10px;border-bottom:1px solid #F0F6FF;word-break:break-word}
 .rmbtns{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap}
 .bback{padding:9px 15px;background:#F1F5F9;color:var(--text);border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.84rem}
 .bconfirm{padding:9px 20px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.84rem}
@@ -1324,7 +1333,7 @@ input.qty{width:70px;font-weight:600}
       <div style="font-weight:700;font-size:.88rem;color:var(--blue-dark);margin-bottom:10px">🚚 Logística del pedido</div>
       <div style="margin-bottom:12px">
         <span style="font-size:.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">¿Cómo recibís el pedido?</span>
-        <div style="display:flex;gap:20px">
+        <div style="display:flex;gap:12px 20px;flex-wrap:wrap">
           <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.9rem">
             <input type="radio" name="revModality" value="envio" checked style="accent-color:var(--primary)"> 🚛 Envío a domicilio
           </label>
