@@ -345,10 +345,14 @@ function handleRefreshPrices(data) {
     if (!codigo || codigo.toLowerCase() === 'código' || codigo.toLowerCase() === 'codigo') continue; // fila vacía o encabezado repetido de sección
     if (!isNaN(precio) && precio > 0) {
       products.push({ codigo: codigo, descripcion: descripcion, categoria: categoria, precio: precio, moneda: moneda || 'US$' });
-    } else {
-      categoria = codigo; // fila título de categoría (sin precio válido)
+    } else if (!descripcion) {
+      categoria = codigo; // fila título de categoría (sin descripción y sin precio válido)
       categoriasDetectadas++;
     }
+    // si tiene descripción pero no precio válido (ej. modelo "próximamente"
+    // todavía sin precio cargado), no es ni producto ni título — se omite
+    // del catálogo sin pisar la categoría vigente (antes esto rompía la
+    // categorización de todo lo que venía después, ver iGARDEN SERIE M1)
   }
   if (!products.length) {
     return { ok: false, error: 'No se encontró ningún producto con precio válido — revisar el formato de la planilla.' };
