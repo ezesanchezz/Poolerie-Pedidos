@@ -8,6 +8,7 @@ on:
     branches: [ main ]
     paths:
       - 'poolerie_pedidos.html'
+      - 'manifest.json'
   workflow_dispatch: {} # permite dispararlo a mano desde la pestaña Actions, para probar
 
 jobs:
@@ -27,6 +28,7 @@ jobs:
         run: |
           mkdir dist
           cp poolerie_pedidos.html dist/index.html
+          cp manifest.json dist/manifest.json
 
       - name: Subir por FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
