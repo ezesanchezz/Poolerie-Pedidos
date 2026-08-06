@@ -9,6 +9,8 @@ on:
     paths:
       - 'poolerie_pedidos.html'
       - 'manifest.json'
+      - 'icon-192.png'
+      - 'icon-512.png'
   workflow_dispatch: {} # permite dispararlo a mano desde la pestaña Actions, para probar
 
 jobs:
@@ -29,6 +31,8 @@ jobs:
           mkdir dist
           cp poolerie_pedidos.html dist/index.html
           cp manifest.json dist/manifest.json
+          cp icon-192.png dist/icon-192.png
+          cp icon-512.png dist/icon-512.png
 
       - name: Subir por FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
