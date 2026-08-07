@@ -175,7 +175,7 @@ header{
 .h-divider{width:1px;height:28px;background:rgba(255,255,255,.3)}
 .hleft-text h1{font-size:.95rem;font-weight:700;color:#fff}
 .hleft-text .hsub{font-size:.72rem;opacity:.75;margin-top:1px}
-.hright{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.hright{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-left:auto}
 .chip{
   background:rgba(255,255,255,.16);padding:4px 12px;
   border-radius:20px;font-size:.78rem;
@@ -3282,34 +3282,52 @@ function closeAdminPanel() {
 // Ni el admin ni nadie más recibe contraseñas del backend — nunca viajan
 // al navegador. Por eso ya no hay "mostrar contraseña": se muestra si el
 // cliente ya definió la suya, y para cambiarla está el botón de resetear.
+function estadoClave(passwordChanged) {
+  return passwordChanged
+    ? '<span style="color:#16A34A;font-size:.74rem;font-weight:700">✅ Definida</span>'
+    : '<span style="color:#D97706;font-size:.74rem;font-weight:700">🔓 Sin cambiar</span>';
+}
+
+function clientRows(list) {
+  if (!list.length) return '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:12px">Sin clientes para mostrar</td></tr>';
+  return list.map(u => `
+    <tr>
+      <td class="cod" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.key)}</td>
+      <td>${esc(u.razonSocial)}</td>
+      <td>${esc(u.cuit||'—')}</td>
+      <td style="text-align:center">${u.descuento}%</td>
+      <td>${estadoClave(u.passwordChanged)}</td>
+      <td class="admin-actions">
+        <button onclick="adminShowUserForm('${esc(u.key)}')" title="Editar">✏️</button>
+        <button onclick="adminResetPassword('${esc(u.key)}')" title="Resetear al CUIT sin guiones" class="del" style="opacity:.7;font-size:.75rem">🔄</button>
+        <button class="del" onclick="adminDeleteUser('${esc(u.key)}')" title="Eliminar">🗑</button>
+      </td>
+    </tr>`).join('');
+}
+
+// Filtra la tabla de Clientes del admin por razón social, clave o CUIT —
+// no pide nada al backend, filtra sobre la lista que ya está en caché
+// (la misma que usa el buscador del selector rápido de clientes).
+function filterAdminClients(q) {
+  const tbody = document.getElementById('adminClientsBody');
+  if (!tbody) return;
+  const term = normalize(q || '');
+  const all = getClientList();
+  const filtered = term.length < 1
+    ? all
+    : all.filter(c =>
+        normalize(c.razonSocial).includes(term) ||
+        normalize(c.key).includes(term) ||
+        (c.cuit && c.cuit.replace(/-/g, '').includes(term.replace(/-/g, '')))
+      );
+  tbody.innerHTML = clientRows(filtered);
+}
+
 async function renderAdminUsers(el) {
   if(!currentUser?.isAdmin) return;
   el.innerHTML = '<p style="color:var(--muted);padding:20px">Cargando usuarios…</p>';
   const { clients, vendors } = await fetchAdminUserLists(true);
   if (adminCurrentTab !== 'users') return; // se cambió de pestaña mientras cargaba
-
-  function estadoClave(passwordChanged) {
-    return passwordChanged
-      ? '<span style="color:#16A34A;font-size:.74rem;font-weight:700">✅ Definida</span>'
-      : '<span style="color:#D97706;font-size:.74rem;font-weight:700">🔓 Sin cambiar</span>';
-  }
-
-  function clientRows(list) {
-    if (!list.length) return '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:12px">Sin clientes registrados</td></tr>';
-    return list.map(u => `
-      <tr>
-        <td class="cod" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.key)}</td>
-        <td>${esc(u.razonSocial)}</td>
-        <td>${esc(u.cuit||'—')}</td>
-        <td style="text-align:center">${u.descuento}%</td>
-        <td>${estadoClave(u.passwordChanged)}</td>
-        <td class="admin-actions">
-          <button onclick="adminShowUserForm('${esc(u.key)}')" title="Editar">✏️</button>
-          <button onclick="adminResetPassword('${esc(u.key)}')" title="Resetear al CUIT sin guiones" class="del" style="opacity:.7;font-size:.75rem">🔄</button>
-          <button class="del" onclick="adminDeleteUser('${esc(u.key)}')" title="Eliminar">🗑</button>
-        </td>
-      </tr>`).join('');
-  }
 
   function vendorRows(list) {
     if (!list.length) return '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px">Sin vendedores registrados</td></tr>';
@@ -3347,9 +3365,13 @@ async function renderAdminUsers(el) {
         </label>
       </div>
     </div>
+    <input type="text" id="adminClientSearch" placeholder="🔍 Buscar cliente por razón social, clave o CUIT..."
+      oninput="filterAdminClients(this.value)"
+      style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:9px;font-size:.85rem;font-family:inherit;margin-bottom:10px;box-sizing:border-box;outline:none;transition:border-color .15s"
+      onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
     <table class="admin-table">
       <thead><tr><th>Clave login</th><th>Razón Social</th><th>CUIT</th><th>Dto%</th><th>Estado clave</th><th></th></tr></thead>
-      <tbody>${clientRows(clients)}</tbody>
+      <tbody id="adminClientsBody">${clientRows(clients)}</tbody>
     </table>
 
     <div id="adminUserForm" style="display:none"></div>
