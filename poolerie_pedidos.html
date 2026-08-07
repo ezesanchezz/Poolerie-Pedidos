@@ -428,6 +428,19 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
 .mbtns{display:flex;gap:9px;justify-content:flex-end;margin-top:8px}
 .bsave{padding:9px 20px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
 .bcancel{padding:9px 14px;background:#F1F5F9;color:var(--text);border:none;border-radius:8px;cursor:pointer;font-family:inherit}
+.tour-highlight{
+  position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(10,30,60,.65);
+  pointer-events:none;z-index:300;
+  transition:top .45s cubic-bezier(.4,0,.2,1),left .45s cubic-bezier(.4,0,.2,1),
+             width .45s cubic-bezier(.4,0,.2,1),height .45s cubic-bezier(.4,0,.2,1);
+}
+.tour-tooltip{
+  position:fixed;z-index:301;background:var(--surface,#fff);width:280px;max-width:calc(100vw - 24px);
+  padding:16px;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.28);
+  transition:top .45s cubic-bezier(.4,0,.2,1),left .45s cubic-bezier(.4,0,.2,1);
+}
+.tour-dot{width:7px;height:7px;border-radius:50%;background:var(--border);transition:background .15s}
+.tour-dot.active{background:var(--blue)}
 
 /* ══════ MI CUENTA BTN ══════ */
 .bsm-cuenta{
@@ -1150,6 +1163,7 @@ input.qty{width:70px;font-weight:600}
       </button>
       <button class="bsm admin-hbtn" onclick="openAdminPanel('users')" id="btnAdmin" style="display:none">🛠 Admin</button>
       <button class="bsm bsm-cuenta" onclick="openMiCuenta()" id="btnMiCuenta" style="display:none">⚙️ Mi cuenta</button>
+      <button class="bsm" onclick="openTutorial()" id="btnManualUso" title="Volver a ver el mini tutorial de uso">📖 Manual de uso</button>
       <button class="bsm" onclick="downloadPriceList()" title="Descargar lista de precios en Excel">📄 Lista de precios</button>
       <button class="bsm" onclick="doLogout()">Salir</button>
     </div>
@@ -1421,6 +1435,23 @@ input.qty{width:70px;font-weight:600}
   </div>
 </div>
 
+<!-- TUTORIAL / MANUAL DE USO — recorrido interactivo, señala elementos
+     reales de la pantalla en vez de un modal genérico. -->
+<div class="tour-highlight" id="tourHighlight" style="display:none"></div>
+<div class="tour-tooltip" id="tourTooltip" style="display:none">
+  <div id="tourStepIcon" style="font-size:1.8rem;line-height:1;margin-bottom:6px"></div>
+  <h3 id="tourStepTitle" style="margin:0 0 6px;font-size:.95rem;font-weight:800;color:var(--blue-dark)"></h3>
+  <p id="tourStepText" style="margin:0 0 14px;font-size:.82rem;color:var(--muted);line-height:1.5"></p>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <button class="bcancel" onclick="skipTutorial()" id="tourSkipBtn" style="padding:6px 10px;font-size:.76rem">Saltar</button>
+    <div id="tourDots" style="display:flex;gap:5px"></div>
+    <div style="display:flex;gap:6px">
+      <button class="bcancel" onclick="prevTutorialStep()" id="tourPrevBtn" style="padding:6px 10px;font-size:.76rem;display:none">←</button>
+      <button class="bsave" onclick="nextTutorialStep()" id="tourNextBtn" style="padding:6px 14px;font-size:.76rem">Siguiente →</button>
+    </div>
+  </div>
+</div>
+
 <!-- HISTORY MODAL -->
 <div class="modal-overlay" id="histModal">
   <div class="mcard hist-modal">
@@ -1582,6 +1613,125 @@ function toggleTheme() {
 // El <script> del <head> ya puso el atributo antes de pintar (evita el
 // flash); acá solo se sincronizan los íconos de los botones con eso.
 applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+// ═══════════════════════════════════════════
+//  MINI TUTORIAL — recorrido interactivo que señala elementos reales de
+//  la pantalla (no un modal genérico). Se muestra solo la primera vez
+//  que cada cliente entra (guardado en localStorage por clave de
+//  usuario) y se puede volver a abrir a mano desde "Manual de uso".
+// ═══════════════════════════════════════════
+const TOUR_STEPS = [
+  { icon: '👋', title: '¡Bienvenido al Portal de Pedidos!', text: 'Acá armás y enviás tus pedidos a Poolerie directo, sin llamados ni WhatsApp. Te mostramos rapidito dónde está cada cosa.', target: null },
+  { icon: '🔍', title: 'Buscá tus productos', text: 'Escribí acá el nombre o código de lo que necesitás.', target: '#srch' },
+  { icon: '🗂️', title: 'O filtrá por categoría', text: 'Tocá una categoría para ver solo esos productos.', target: '#catTabs' },
+  { icon: '🔢', title: 'Cargá las cantidades', text: 'Tocá + y − (o escribí el número directo). Se va guardando solo, así que si volvés más tarde seguís donde quedaste.', target: '.qty-stepper' },
+  { icon: '📋', title: 'Revisá y enviá', text: 'Cuando termines, tocá acá para confirmar forma de pago, envío o retiro antes de mandar el pedido.', target: '#btnSend' },
+  { icon: '📖', title: '¿Te olvidaste algo?', text: 'Tocá este botón cuando quieras para volver a ver este recorrido.', target: '#btnManualUso' }
+];
+let tutorialStepIndex = 0;
+
+function tutorialSeenKey() {
+  return 'poolerie_tutorial_seen_' + (currentUser && currentUser.key ? currentUser.key : 'anon');
+}
+
+function tourStepHasValidTarget(step) {
+  if (!step.target) return true;
+  const el = document.querySelector(step.target);
+  return !!(el && el.offsetParent !== null);
+}
+
+function positionTour(target) {
+  const highlight = document.getElementById('tourHighlight');
+  const tooltip = document.getElementById('tourTooltip');
+  const ttW0 = tooltip.offsetWidth || 280;
+  const ttH0 = tooltip.offsetHeight || 160;
+  if (!target) {
+    highlight.style.display = 'none';
+    tooltip.style.top = Math.max(10, (window.innerHeight - ttH0) / 2) + 'px';
+    tooltip.style.left = Math.max(10, (window.innerWidth - ttW0) / 2) + 'px';
+    return;
+  }
+  const pad = 8;
+  const r = target.getBoundingClientRect();
+  highlight.style.display = 'block';
+  highlight.style.top = (r.top - pad) + 'px';
+  highlight.style.left = (r.left - pad) + 'px';
+  highlight.style.width = (r.width + pad * 2) + 'px';
+  highlight.style.height = (r.height + pad * 2) + 'px';
+
+  const ttW = tooltip.offsetWidth || 280;
+  const ttH = tooltip.offsetHeight || 160;
+  let top = r.bottom + pad + 10;
+  if (top + ttH > window.innerHeight - 10) top = r.top - ttH - pad - 10;
+  if (top < 10) top = 10;
+  let left = r.left;
+  if (left + ttW > window.innerWidth - 10) left = window.innerWidth - ttW - 10;
+  if (left < 10) left = 10;
+  tooltip.style.top = top + 'px';
+  tooltip.style.left = left + 'px';
+}
+
+function renderTourStep() {
+  const step = TOUR_STEPS[tutorialStepIndex];
+  document.getElementById('tourStepIcon').textContent = step.icon;
+  document.getElementById('tourStepTitle').textContent = step.title;
+  document.getElementById('tourStepText').textContent = step.text;
+  const isLast = tutorialStepIndex === TOUR_STEPS.length - 1;
+  document.getElementById('tourPrevBtn').style.display = tutorialStepIndex === 0 ? 'none' : 'inline-block';
+  document.getElementById('tourSkipBtn').style.display = isLast ? 'none' : 'inline-block';
+  document.getElementById('tourNextBtn').textContent = isLast ? '¡Listo!' : 'Siguiente →';
+  const dots = document.getElementById('tourDots');
+  dots.innerHTML = TOUR_STEPS.map((_, i) => `<span class="tour-dot${i === tutorialStepIndex ? ' active' : ''}"></span>`).join('');
+
+  document.getElementById('tourTooltip').style.display = 'block';
+  const target = step.target ? document.querySelector(step.target) : null;
+  if (target && target.offsetParent !== null) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function () { positionTour(target); }, 350);
+  } else {
+    positionTour(null);
+  }
+}
+
+function openTutorial() {
+  let i = 0;
+  while (i < TOUR_STEPS.length - 1 && !tourStepHasValidTarget(TOUR_STEPS[i])) i++;
+  tutorialStepIndex = i;
+  renderTourStep();
+}
+
+function nextTutorialStep() {
+  if (tutorialStepIndex === TOUR_STEPS.length - 1) { finishTutorial(); return; }
+  let i = tutorialStepIndex + 1;
+  while (i < TOUR_STEPS.length - 1 && !tourStepHasValidTarget(TOUR_STEPS[i])) i++;
+  tutorialStepIndex = i;
+  renderTourStep();
+}
+
+function prevTutorialStep() {
+  if (tutorialStepIndex === 0) return;
+  let i = tutorialStepIndex - 1;
+  while (i > 0 && !tourStepHasValidTarget(TOUR_STEPS[i])) i--;
+  tutorialStepIndex = i;
+  renderTourStep();
+}
+
+function skipTutorial() { finishTutorial(); }
+
+function finishTutorial() {
+  document.getElementById('tourTooltip').style.display = 'none';
+  document.getElementById('tourHighlight').style.display = 'none';
+  try { localStorage.setItem(tutorialSeenKey(), '1'); } catch (e) {}
+}
+
+// Solo para clientes (no vendedores/admin) y solo si nunca lo cerraron antes.
+function maybeShowTutorialOnLogin() {
+  if (!currentUser || currentUser.isVendor) return;
+  try {
+    if (localStorage.getItem(tutorialSeenKey())) return;
+  } catch (e) { return; }
+  openTutorial();
+}
 
 // ═══════════════════════════════════════════
 //  LISTA / TARJETAS (catálogo) — elección del usuario, se guarda por
@@ -1968,6 +2118,7 @@ async function enterApp() {
   buildCatTabs();
   if(user.isVendor) buildClientSwitcher();
   renderTable();
+  maybeShowTutorialOnLogin();
 }
 
 async function submitForcedPasswordChange() {
