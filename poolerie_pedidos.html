@@ -746,11 +746,34 @@ mark{background:#FEF08A;border-radius:3px;padding:0 2px}
   .cr-cuit{font-size:.7rem}
   .cr-input{width:66px}
 
-  /* ADMIN */
+  /* ADMIN — mismo apilado sin scroll horizontal que ya usan el catálogo
+     (#tbl) y la revisión de pedido (.rtbl): en vez de una tabla ancha con
+     scroll, cada fila se convierte en una "tarjeta" con los datos uno
+     abajo del otro. Usa data-label en cada <td> para mostrar de qué dato
+     se trata (se agrega en las plantillas de vendorRows/clientRows/etc). */
   .admin-tabs{overflow-x:auto;flex-wrap:nowrap}
   .admin-tab{white-space:nowrap;flex-shrink:0}
-  .admin-table{font-size:.76rem}
-  .admin-table th,.admin-table td{padding:6px 8px}
+  .admin-table{font-size:.8rem}
+  .admin-table thead{display:none}
+  .admin-table tbody{display:block}
+  .admin-table tr{
+    display:block;background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:8px 10px;margin-bottom:8px;
+  }
+  .admin-table td{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:4px 0!important;border:none!important;text-align:right;
+    white-space:normal;word-break:break-word;
+  }
+  .admin-table td[data-label]::before{
+    content:attr(data-label);font-weight:700;color:var(--muted);
+    text-align:left;flex-shrink:0;font-size:.72rem;
+  }
+  .admin-table td.admin-actions{
+    justify-content:flex-end;border-top:1px solid var(--border)!important;
+    margin-top:4px;padding-top:8px!important;
+  }
+  .admin-table td.cod{max-width:none!important;overflow:visible!important;white-space:normal!important}
 }
 
 /* ══════════════════════════════════════
@@ -3303,11 +3326,11 @@ function clientRows(list) {
   if (!list.length) return '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:12px">Sin clientes para mostrar</td></tr>';
   return list.map(u => `
     <tr>
-      <td class="cod" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.key)}</td>
-      <td>${esc(u.razonSocial)}</td>
-      <td>${esc(u.cuit||'—')}</td>
-      <td style="text-align:center">${u.descuento}%</td>
-      <td>${estadoClave(u.passwordChanged)}</td>
+      <td class="cod" data-label="Clave" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.key)}</td>
+      <td data-label="Razón Social">${esc(u.razonSocial)}</td>
+      <td data-label="CUIT">${esc(u.cuit||'—')}</td>
+      <td data-label="Dto%" style="text-align:center">${u.descuento}%</td>
+      <td data-label="Estado clave">${estadoClave(u.passwordChanged)}</td>
       <td class="admin-actions">
         <button onclick="adminShowUserForm('${esc(u.key)}')" title="Editar">✏️</button>
         <button onclick="adminResetPassword('${esc(u.key)}')" title="Resetear al CUIT sin guiones" class="del" style="opacity:.7;font-size:.75rem">🔄</button>
@@ -3344,9 +3367,9 @@ async function renderAdminUsers(el) {
     if (!list.length) return '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px">Sin vendedores registrados</td></tr>';
     return list.map(u => `
       <tr>
-        <td class="cod">${esc(u.key)}</td>
-        <td>${esc(u.razonSocial)}</td>
-        <td>${esc(u.email||'—')}</td>
+        <td class="cod" data-label="Clave">${esc(u.key)}</td>
+        <td data-label="Nombre">${esc(u.razonSocial)}</td>
+        <td data-label="Email">${esc(u.email||'—')}</td>
         <td class="admin-actions">
           <button onclick="adminShowUserForm('${esc(u.key)}')" title="Editar">✏️</button>
           <button onclick="adminResetPassword('${esc(u.key)}')" title="Resetear contraseña" class="del" style="opacity:.7;font-size:.75rem">🔄</button>
@@ -3495,11 +3518,11 @@ async function adminImportClientsExcel(input) {
             <table class="admin-table" style="font-size:.79rem">
               <thead><tr><th>Clave login</th><th>Razón Social</th><th>CUIT</th><th>Contraseña inicial</th><th>Estado</th></tr></thead>
               <tbody>${preview.map(r=>`<tr>
-                <td class="cod">${esc(r.key)}</td>
-                <td>${esc(r.rs)}</td>
-                <td>${esc(r.cuit)}</td>
-                <td class="cod">${esc(r.pass)}</td>
-                <td><span class="rol-badge ${r.isNew?'cli':'vend'}">${r.isNew?'Nuevo':'Actualizar'}</span></td>
+                <td class="cod" data-label="Clave">${esc(r.key)}</td>
+                <td data-label="Razón Social">${esc(r.rs)}</td>
+                <td data-label="CUIT">${esc(r.cuit)}</td>
+                <td class="cod" data-label="Contraseña">${esc(r.pass)}</td>
+                <td data-label="Estado"><span class="rol-badge ${r.isNew?'cli':'vend'}">${r.isNew?'Nuevo':'Actualizar'}</span></td>
               </tr>`).join('')}</tbody>
             </table>
           </div>
@@ -3813,10 +3836,10 @@ function renderAdminProducts(el) {
       <thead><tr><th>Código</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Precio USD</th><th></th></tr></thead>
       <tbody id="prodTableBody">
         ${PRODUCTS.map((p,i)=>`<tr id="prod-row-${i}">
-          <td class="cod" id="prod-cod-${i}">${esc(p.codigo)}</td>
-          <td id="prod-desc-${i}">${esc(p.descripcion)}</td>
-          <td id="prod-cat-${i}">${esc(p.categoria)}</td>
-          <td style="text-align:right" id="prod-prec-${i}">${fmtUSD(p.precio)}</td>
+          <td class="cod" id="prod-cod-${i}" data-label="Código">${esc(p.codigo)}</td>
+          <td id="prod-desc-${i}" data-label="Descripción">${esc(p.descripcion)}</td>
+          <td id="prod-cat-${i}" data-label="Categoría">${esc(p.categoria)}</td>
+          <td style="text-align:right" id="prod-prec-${i}" data-label="Precio USD">${fmtUSD(p.precio)}</td>
           <td class="admin-actions">
             <button onclick="adminInlineEditProduct(${i},'${esc(p.codigo)}')" title="Editar">✏️</button>
             <button class="del" onclick="adminDeleteProduct('${esc(p.codigo)}')" title="Quitar del catálogo">🗑</button>
@@ -3836,12 +3859,12 @@ function adminInlineEditProduct(i, cod) {
   const row = document.getElementById('prod-row-'+i);
   if (!row) return;
   row.innerHTML = `
-    <td><input id="ie_cod" value="${esc(p.codigo)}" style="width:100%;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;font-family:monospace;font-size:.8rem"/></td>
-    <td><input id="ie_desc" value="${esc(p.descripcion)}" style="width:100%;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;font-size:.84rem"/></td>
-    <td><select id="ie_cat" style="width:100%;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;font-size:.82rem">
+    <td data-label="Código"><input id="ie_cod" value="${esc(p.codigo)}" style="width:100%;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;font-family:monospace;font-size:.8rem"/></td>
+    <td data-label="Descripción"><input id="ie_desc" value="${esc(p.descripcion)}" style="width:100%;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;font-size:.84rem"/></td>
+    <td data-label="Categoría"><select id="ie_cat" style="width:100%;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;font-size:.82rem">
       ${cats.map(c=>`<option value="${esc(c)}" ${c===p.categoria?'selected':''}>${esc(c)}</option>`).join('')}
     </select></td>
-    <td><input id="ie_prec" type="number" step="0.01" min="0" value="${p.precio}" style="width:90px;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;text-align:right;font-size:.84rem"/></td>
+    <td data-label="Precio USD"><input id="ie_prec" type="number" step="0.01" min="0" value="${p.precio}" style="width:90px;padding:4px 6px;border:1.5px solid var(--primary);border-radius:5px;text-align:right;font-size:.84rem"/></td>
     <td class="admin-actions">
       <button class="admin-btn-save" style="padding:4px 10px;font-size:.78rem" onclick="adminSaveInlineProduct(${i},'${esc(cod)}')">💾</button>
       <button class="admin-btn-cancel" style="padding:4px 8px;font-size:.78rem" onclick="openAdminPanel('products')">✕</button>
