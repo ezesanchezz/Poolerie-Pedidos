@@ -2089,9 +2089,11 @@ async function doLogin() {
   sessionToken = res.token;
   const user = res.user;
   currentUser = user; // el descuento viene tal cual del servidor, sin overrides locales
-  // Cambio de contraseña obligatorio para clientes que nunca cambiaron la inicial
-  const isClient = !user.isVendor && !user.isAdmin;
-  if (isClient && !user.passwordChanged) {
+  // Cambio de contraseña obligatorio para clientes y vendedores que nunca
+  // cambiaron la inicial (los admins quedan afuera, para no arriesgar que
+  // alguien quede afuera de su propia cuenta por este chequeo).
+  const mustChangePassword = !user.isAdmin;
+  if (mustChangePassword && !user.passwordChanged) {
     document.getElementById('loginPage').style.display='none';
     document.getElementById('fp_nueva').value='';
     document.getElementById('fp_confirma').value='';
@@ -3346,6 +3348,7 @@ async function renderAdminUsers(el) {
         <td>${esc(u.email||'—')}</td>
         <td class="admin-actions">
           <button onclick="adminShowUserForm('${esc(u.key)}')" title="Editar">✏️</button>
+          <button onclick="adminResetPassword('${esc(u.key)}')" title="Resetear contraseña" class="del" style="opacity:.7;font-size:.75rem">🔄</button>
           <button class="del" onclick="adminDeleteUser('${esc(u.key)}')" title="Eliminar">🗑</button>
         </td>
       </tr>`).join('');
@@ -3441,7 +3444,7 @@ async function adminResetPassword(key) {
   const u = [...(await fetchClientList()), ...(await fetchVendors())].find(x=>x.key===key);
   if (!u) return;
   const newPass = (u.cuit||'').replace(/-/g,'') || key;
-  if (!confirm(`¿Resetear contraseña de "${u.razonSocial}" a su CUIT sin guiones (${newPass})?`)) return;
+  if (!confirm(`¿Resetear contraseña de "${u.razonSocial}" a "${newPass}"?`)) return;
   const res = await apiCall({ action:'resetPassword', token:sessionToken, key });
   if (!res.ok) { showToast(res.error || 'No se pudo resetear la contraseña','err'); return; }
   showToast('✅ Contraseña reseteada','ok');
