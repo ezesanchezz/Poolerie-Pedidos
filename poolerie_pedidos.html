@@ -3270,6 +3270,7 @@ async function guardarNuevaClave() {
 // ═══════════════════════════════════════════
 let adminCurrentTab = 'users';
 let adminEditKey    = null;
+let adminEditUserWasVendor = false; // para avisar si un guardado le cambia el rol a un vendedor existente
 
 function openAdminPanel(tab) {
   if(!currentUser?.isAdmin) return;
@@ -3533,6 +3534,7 @@ async function adminShowUserForm(key) {
     u = (await fetchClientList()).find(x=>x.key===key);
     if (!u) { u = (await fetchVendors()).find(x=>x.key===key); isVendorUser = !!u; }
   }
+  adminEditUserWasVendor = isVendorUser;
   const f = document.getElementById('adminUserForm');
   if (!f) return; // se cambió de pestaña mientras cargaba
   f.style.display = 'block';
@@ -3580,10 +3582,18 @@ async function adminSaveUser() {
   const cuit = document.getElementById('af_cuit').value.trim();
   const desc = parseFloat(document.getElementById('af_desc').value) || 32.5;
   const isVendor = document.getElementById('af_rol').value === '1';
-  const email = isVendor ? (document.getElementById('af_email').value.trim()) : '';
+  // El email NUNCA se fuerza a vacío por el rol elegido en el desplegable —
+  // antes se borraba el email del vendedor apenas se guardaba como
+  // "Cliente" por error, y quedaba perdido para siempre (sin destino para
+  // notificarle sus pedidos). Ahora se manda tal cual esté cargado en el
+  // campo, se vea o no en el formulario.
+  const email = document.getElementById('af_email').value.trim();
   if (!key)  { showToast('Ingresá la clave de login','err'); return; }
   if (!adminEditKey && !pass) { showToast('Ingresá una contraseña','err'); return; }
   if (!rs)   { showToast('Ingresá la razón social','err'); return; }
+  if (adminEditKey && adminEditUserWasVendor && !isVendor) {
+    if (!confirm(`"${rs}" es vendedor y lo estás por guardar como Cliente. Esto puede afectar los pedidos que tenga asignados. ¿Seguro que querés cambiarle el rol?`)) return;
+  }
   const payload = { action:'saveUser', token:sessionToken, key, razonSocial:rs, cuit, descuento:desc, isVendor, email };
   if (pass) payload.password = pass; // vacío = no tocar la contraseña actual
   const res = await apiCall(payload);
