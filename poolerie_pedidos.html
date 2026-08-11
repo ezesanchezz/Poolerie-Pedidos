@@ -3524,7 +3524,15 @@ async function adminApplyClientImport(preview) {
 async function adminShowUserForm(key) {
   if(!currentUser?.isAdmin) return;
   adminEditKey = key;
-  const u = key ? [...(await fetchClientList()), ...(await fetchVendors())].find(x=>x.key===key) : null;
+  // Ni la lista de clientes ni la de vendedores traen un campo "isVendor"
+  // propio — hay que fijarse de QUÉ lista salió la coincidencia para saber
+  // el rol real (antes esto quedaba siempre en "Cliente" por defecto y al
+  // guardar convertía vendedores en clientes sin querer).
+  let u = null, isVendorUser = false;
+  if (key) {
+    u = (await fetchClientList()).find(x=>x.key===key);
+    if (!u) { u = (await fetchVendors()).find(x=>x.key===key); isVendorUser = !!u; }
+  }
   const f = document.getElementById('adminUserForm');
   if (!f) return; // se cambió de pestaña mientras cargaba
   f.style.display = 'block';
@@ -3544,11 +3552,11 @@ async function adminShowUserForm(key) {
         <input id="af_desc" type="number" min="0" max="100" step="0.5" value="${u?u.descuento:32.5}"/>
         <label>Rol</label>
         <select id="af_rol" onchange="adminToggleEmailField(this.value)">
-          <option value="0" ${!u||!u.isVendor?'selected':''}>Cliente</option>
-          <option value="1" ${u&&u.isVendor?'selected':''}>Vendedor</option>
+          <option value="0" ${!isVendorUser?'selected':''}>Cliente</option>
+          <option value="1" ${isVendorUser?'selected':''}>Vendedor</option>
         </select>
-        <label id="af_email_label" style="${u&&u.isVendor?'':'display:none'}">Email vendedor</label>
-        <input id="af_email" type="email" value="${esc(u&&u.email?u.email:'')}" placeholder="vendedor@ejemplo.com" style="${u&&u.isVendor?'':'display:none'}"/>
+        <label id="af_email_label" style="${isVendorUser?'':'display:none'}">Email vendedor</label>
+        <input id="af_email" type="email" value="${esc(u&&u.email?u.email:'')}" placeholder="vendedor@ejemplo.com" style="${isVendorUser?'':'display:none'}"/>
       </div>
       <div class="admin-form-btns">
         <button class="admin-btn-save" onclick="adminSaveUser()">💾 Guardar</button>
